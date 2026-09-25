@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: shrutilipi-backend
+    runtime: docker
+    rootDir: backend
+    plan: free
+    envVars:
+      - key: FRONTEND_URL
+        value: https://YOUR-VERCEL-APP.vercel.app
