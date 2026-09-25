@@ -6,4 +6,4 @@ services:
     plan: free
     envVars:
       - key: FRONTEND_URL
-        value: https://YOUR-VERCEL-APP.vercel.app
+        value: https://frontend-six-woad-540yl4bn2c.vercel.app
