@@ -7,3 +7,9 @@ services:
     envVars:
       - key: FRONTEND_URL
         value: https://frontend-six-woad-540yl4bn2c.vercel.app
+      - key: WEBSHARE_PROXY_USERNAME
+        sync: false
+      - key: WEBSHARE_PROXY_PASSWORD
+        sync: false
+      - key: WEBSHARE_PROXY_HOSTS
+        sync: false

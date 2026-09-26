@@ -1,7 +1,10 @@
 """Video ID extraction + caption fetching (v1: captions-only)."""
 
+import os
+import random
 import re
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -41,6 +44,40 @@ def get_title(video_id: str, timeout: float = 5.0) -> Optional[str]:
     return None
 
 
+def _get_proxy_config():
+    """Build GenericProxyConfig from env for Webshare free-tier rotation.
+
+    Priority:
+    1. WEBSHARE_PROXY_LIST = comma-separated full URLs (scheme://user:pass@host:port)
+    2. WEBSHARE_PROXY_USERNAME + WEBSHARE_PROXY_PASSWORD + WEBSHARE_PROXY_HOSTS
+       where HOSTS = comma-separated host:port — user/pass applied to random host
+    3. No env -> None (direct, local dev / no proxy)
+    """
+    from youtube_transcript_api.proxies import GenericProxyConfig
+
+    full_list = os.getenv("WEBSHARE_PROXY_LIST", "").strip()
+    if full_list:
+        urls = [u.strip() for u in full_list.split(",") if u.strip()]
+        if urls:
+            pick = random.choice(urls)
+            return GenericProxyConfig(http_url=pick, https_url=pick)
+
+    user = os.getenv("WEBSHARE_PROXY_USERNAME", "").strip()
+    password = os.getenv("WEBSHARE_PROXY_PASSWORD", "").strip()
+    hosts = os.getenv("WEBSHARE_PROXY_HOSTS", "").strip()
+
+    if user and password and hosts:
+        host_list = [h.strip() for h in hosts.split(",") if h.strip()]
+        if host_list:
+            host = random.choice(host_list)
+            safe_user = quote(user, safe="")
+            safe_pass = quote(password, safe="")
+            url = f"http://{safe_user}:{safe_pass}@{host}"
+            return GenericProxyConfig(http_url=url, https_url=url)
+
+    return None
+
+
 def fetch_caption_transcript(video_id: str, lang: str = "en"):
     """
     Returns (segments, resolved_language) using youtube-transcript-api 1.x.
@@ -51,7 +88,8 @@ def fetch_caption_transcript(video_id: str, lang: str = "en"):
 
     langs = [lang, "en"] if lang != "en" else ["en"]
     # New instance per request: requests.Session is not thread-safe.
-    api = YouTubeTranscriptApi()
+    # proxy_config=None -> direct (local dev); rotation spreads ban risk across 10 IPs.
+    api = YouTubeTranscriptApi(proxy_config=_get_proxy_config())
 
     # 1) Fast path: direct fetch with preferred languages
     try:
