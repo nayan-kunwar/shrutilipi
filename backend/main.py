@@ -7,7 +7,7 @@ import time
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from services.providers import CaptionProvider
+from services.providers import TranscriptError, build_provider
 from services.youtube import extract_video_id
 
 logger = logging.getLogger("shrutilipi")
@@ -36,7 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-provider = CaptionProvider()
+provider = build_provider()
 
 # --- Minimal TTL cache (24h) to avoid re-hitting YouTube ---
 _CACHE: dict[str, tuple[float, dict]] = {}
@@ -83,6 +83,12 @@ def get_transcript(
 
 
 def _map_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, TranscriptError):
+        return HTTPException(
+            status_code=404 if exc.detail == "no_captions" else 502,
+            detail=exc.detail,
+        )
+
     name = type(exc).__name__
     msg = str(exc).lower()
 

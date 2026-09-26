@@ -17,6 +17,13 @@ _VIDEO_PATTERNS = [
 ]
 
 
+def env_truthy(raw: Optional[str], default: bool = True) -> bool:
+    """Parse env truthiness: 0/false/no/off -> False; empty/None -> default."""
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() not in ("0", "false", "no", "off")
+
+
 def extract_video_id(url_or_id: str) -> Optional[str]:
     """Return 11-char video id or None if unparseable."""
     if not url_or_id:
@@ -44,6 +51,15 @@ def get_title(video_id: str, timeout: float = 5.0) -> Optional[str]:
     return None
 
 
+def _hosted_levels_active() -> bool:
+    """True when a hosted level can serve — skip the known-dead free-proxy hop."""
+    if os.getenv("SUPADATA_API_KEY", "").strip() and env_truthy(os.getenv("SUPADATA_ENABLED"), True):
+        return True
+    if os.getenv("SERPAPI_API_KEY", "").strip() and env_truthy(os.getenv("SERPAPI_ENABLED"), False):
+        return True
+    return False
+
+
 def _get_proxy_config():
     """Build GenericProxyConfig from env for Webshare free-tier rotation.
 
@@ -52,7 +68,12 @@ def _get_proxy_config():
     2. WEBSHARE_PROXY_USERNAME + WEBSHARE_PROXY_PASSWORD + WEBSHARE_PROXY_HOSTS
        where HOSTS = comma-separated host:port — user/pass applied to random host
     3. No env -> None (direct, local dev / no proxy)
+    Skipped entirely when a hosted level is active (free proxies are YouTube-blocked;
+    the hosted level will serve — saves 10-20s of dead-proxy retry latency).
     """
+    if _hosted_levels_active():
+        return None
+
     from youtube_transcript_api.proxies import GenericProxyConfig
 
     full_list = os.getenv("WEBSHARE_PROXY_LIST", "").strip()

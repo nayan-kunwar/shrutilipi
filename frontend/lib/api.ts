@@ -45,6 +45,8 @@ function friendlyError(status: number, detail: string): string {
       return "Video is unavailable, private, or age-restricted.";
     case "youtube_blocked":
       return "YouTube temporarily blocked the request. Wait a minute and retry.";
+    case "provider_unavailable":
+      return "Transcript services are busy or out of quota — retry in a few minutes.";
     case "transcript_fetch_failed":
       return "Couldn't fetch the transcript. Please retry.";
     default:
