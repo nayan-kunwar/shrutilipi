@@ -40,13 +40,49 @@ python tools/fetch.py abc123XYZ_- --api https://shrutilipi-backend.onrender.com
 
 ## Windows launcher — `shrutilipi.bat`
 
+A 3-line wrapper so you don't have to type `python tools/fetch.py` every time:
+
 ```bat
 tools\shrutilipi.bat abc123XYZ_-
-tools\shrutilipi.bat --batch urls.txt
+tools\shrutilipi.bat --batch urls.txt --timestamps
 ```
 
-Forwards all args to `fetch.py` and preserves the exit code. Tip: add the
-`tools\` folder to your PATH, then just run `shrutilipi <url>` from anywhere.
+What it contains (see [`shrutilipi.bat`](shrutilipi.bat)):
+
+```bat
+@echo off                          REM silence cmd's own command echo
+python "%~dp0fetch.py" %*          REM run fetch.py next to this .bat, pass all args through
+exit /b %errorlevel%               REM propagate exit code (0/1/2) back to cmd
+```
+
+- `%~dp0` = the folder the `.bat` itself lives in (`tools\`) — works from any
+  working directory, quoted so spacey paths are safe
+- `%*` = every argument you typed after `shrutilipi`, forwarded untouched:
+  `shrutilipi.bat abc123XYZ_- --timestamps --lang hi` runs exactly
+  `python tools\fetch.py abc123XYZ_- --timestamps --lang hi`
+- `exit /b %errorlevel%` keeps scripting honest — `%errorlevel%` reports the
+  real 0/1/2 result, not a fake success
+
+### Add to PATH (optional, one-time)
+
+1. Windows Settings → **System → About → Advanced system settings →
+   Environment Variables**
+2. Under **Path** (user or system), **New** → add the full `...\shrutilipi\tools`
+   folder
+3. Open a new terminal → run from anywhere:
+
+```bat
+shrutilipi abc123XYZ_-
+shrutilipi --batch urls.txt
+```
+
+### Limitations
+
+- **Windows/`cmd` only** (PowerShell runs it too) — on Linux/macOS call
+  `python tools/fetch.py` directly or make a shell alias
+- **Needs Python installed** — it's a launcher, not a bundled `.exe`
+- **No logic of its own** — all flags, output, colors, and errors come from
+  [`fetch.py`](fetch.py); edit that file, not this one
 
 ## Batch mode
 
