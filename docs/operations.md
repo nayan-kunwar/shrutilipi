@@ -150,7 +150,7 @@ npm run build                              # must pass before shipping
 
 ### CLI helper — `tools/fetch.py`
 - **Full usage guide with examples: [`tools/README.md`](../tools/README.md)** (dummy IDs only).
-- Stdlib only, no installs. Talks to any backend (`--api`, default `http://localhost:8000`).
+- Stdlib only, no installs (`rich` optional — pretty progress/table when installed; `--plain` disables). Windows launcher: `tools/shrutilipi.bat`. Talks to any backend (`--api`, default `http://localhost:8000`).
 - Transcript goes to **stdout**, stats/progress to **stderr** (pipes cleanly: `python tools/fetch.py … | pbcopy`).
 - `--out <file>` writes a file; `--out -` or `--batch` writes `<videoId>.txt` per video.
 - `--timestamps` → `[m:ss] text` lines; `--lang <code>`; `--batch <file>` = one URL/line, `#` comments.

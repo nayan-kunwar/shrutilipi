@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """ShrutiLipi CLI — fetch YouTube transcripts via the backend API.
 
-Stdlib only. Examples:
+Stdlib only (rich is optional — pretty progress/tables when installed).
+Examples:
   python tools/fetch.py HHUsHkYhkcM
   python tools/fetch.py https://youtu.be/HHUsHkYhkcM --lang hi --timestamps
   python tools/fetch.py HHUsHkYhkcM --out transcript.txt
@@ -9,6 +10,8 @@ Stdlib only. Examples:
 
 Exit codes: 0 = ok, 1 = no captions / not found, 2 = other error.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
@@ -18,6 +21,22 @@ import urllib.parse
 import urllib.request
 
 DEFAULT_API = "http://localhost:8000"
+
+try:
+    from rich.console import Console
+    from rich.progress import (
+        BarColumn,
+        MofNCompleteColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeElapsedColumn,
+    )
+    from rich.table import Table
+
+    RICH = True
+except ImportError:
+    RICH = False
 
 
 def format_time(seconds: float) -> str:
@@ -46,28 +65,33 @@ def render(data: dict, timestamps: bool) -> str:
     )
 
 
-def emit(data: dict, timestamps: bool, out: str | None) -> int:
+def emit(data: dict, timestamps: bool, out: str | None, pretty: Console | None) -> int:
     text = render(data, timestamps)
-    where = f"{data['videoId']}.txt" if out == "-" else out
     if out:
+        where = f"{data['videoId']}.txt" if out == "-" else out
         with open(where, "w", encoding="utf-8") as fh:
             fh.write(text)
-        print(
-            f"{data['videoId']}: {len(data['segments'])} segments "
-            f"({data['language']}) -> {where}",
-            file=sys.stderr,
-        )
+        msg = f"{data['videoId']}: {len(data['segments'])} segments ({data['language']}) -> {where}"
     else:
+        where = None
         print(text)
-        print(
-            f"\n{data['videoId']}: {len(data['segments'])} segments "
-            f"({data['language']})",
-            file=sys.stderr,
-        )
+        msg = f"{data['videoId']}: {len(data['segments'])} segments ({data['language']})"
+    if pretty is not None:
+        pretty.print(f"[green]{msg}[/green]")
+    else:
+        print(msg, file=sys.stderr)
     return 0
 
 
-def one(api: str, url: str, lang: str, timestamps: bool, out: str | None) -> int:
+def fail_msg(url: str, msg: str, pretty: Console | None) -> None:
+    if pretty is not None:
+        pretty.print(f"[red]{url}: {msg}[/red]")
+    else:
+        print(f"{url}: {msg}", file=sys.stderr)
+
+
+def one(api: str, url: str, lang: str, timestamps: bool, out: str | None,
+        pretty: Console | None) -> int:
     try:
         data = fetch(api, url, lang)
     except urllib.error.HTTPError as e:
@@ -75,12 +99,64 @@ def one(api: str, url: str, lang: str, timestamps: bool, out: str | None) -> int
             detail = json.load(e).get("detail", "")
         except Exception:
             detail = ""
-        print(f"{url}: HTTP {e.code} {detail}", file=sys.stderr)
+        fail_msg(url, f"HTTP {e.code} {detail}", pretty)
         return 1 if detail in ("no_captions", "invalid_url") else 2
     except Exception as e:
-        print(f"{url}: {e}", file=sys.stderr)
+        fail_msg(url, str(e), pretty)
         return 2
-    return emit(data, timestamps, out)
+    return emit(data, timestamps, out, pretty)
+
+
+def run_batch(args, pretty: Console | None) -> int:
+    try:
+        lines = open(args.batch, encoding="utf-8").read().splitlines()
+    except OSError as e:
+        fail_msg(args.batch, f"cannot read batch file: {e}", pretty)
+        return 2
+    urls = [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")]
+    if not urls:
+        return 0
+
+    rows: list[tuple[str, str, str]] = []
+    worst = 0
+
+    if pretty is not None and RICH:
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeElapsedColumn(),
+            console=pretty,
+            transient=True,
+        )
+        with progress:
+            task = progress.add_task("fetching", total=len(urls))
+            for u in urls:
+                rc = one(args.api, u, args.lang, args.timestamps, "-", None)
+                rows.append((u, "", "ok" if rc == 0 else f"exit {rc}"))
+                worst = max(worst, rc)
+                progress.advance(task)
+    else:
+        for i, u in enumerate(urls, 1):
+            if pretty is None:
+                print(f"[{i}/{len(urls)}] {u}", file=sys.stderr)
+            rc = one(args.api, u, args.lang, args.timestamps, "-", pretty)
+            rows.append((u, "", "ok" if rc == 0 else f"exit {rc}"))
+            worst = max(worst, rc)
+
+    if pretty is not None and RICH:
+        table = Table(title=f"batch: {args.batch}")
+        table.add_column("URL", overflow="fold")
+        table.add_column("Status", justify="right")
+        for u, _, status in rows:
+            style = "green" if status == "ok" else "red"
+            table.add_row(u, f"[{style}]{status}[/{style}]")
+        pretty.print(table)
+    else:
+        ok = sum(1 for _, _, s in rows if s == "ok")
+        print(f"batch done: {ok}/{len(rows)} ok (exit {worst})", file=sys.stderr)
+    return worst
 
 
 def main() -> int:
@@ -91,26 +167,17 @@ def main() -> int:
     p.add_argument("--out", help="write to file instead of stdout ('-' = <videoId>.txt)")
     p.add_argument("--timestamps", action="store_true", help="prefix lines with [m:ss]")
     p.add_argument("--batch", help="file with one URL per line (# comments allowed)")
+    p.add_argument("--plain", action="store_true", help="force plain output even if rich is installed")
     args = p.parse_args()
 
+    pretty: Console | None = Console(stderr=True) if (RICH and not args.plain) else None
+
     if args.batch:
-        try:
-            lines = open(args.batch, encoding="utf-8").read().splitlines()
-        except OSError as e:
-            print(f"cannot read batch file: {e}", file=sys.stderr)
-            return 2
-        worst = 0
-        for line in lines:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            rc = one(args.api, line, args.lang, args.timestamps, "-")
-            worst = max(worst, rc)
-        return worst
+        return run_batch(args, pretty)
 
     if not args.url:
         p.error("url required (or use --batch)")
-    return one(args.api, args.url, args.lang, args.timestamps, args.out)
+    return one(args.api, args.url, args.lang, args.timestamps, args.out, pretty)
 
 
 if __name__ == "__main__":

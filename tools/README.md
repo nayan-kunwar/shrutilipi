@@ -8,6 +8,9 @@ Fetch YouTube transcripts from the terminal — stdlib only, nothing to install.
 - A running backend:
   - **Local:** `python -m uvicorn main:app --port 8000` (from `backend/`)
   - **Production:** pass `--api https://shrutilipi-backend.onrender.com`
+- **Optional:** `pip install rich` — unlocks colored output, batch progress bar
+  and summary table. Without it the CLI still works, just plain (and `--plain`
+  forces plain even when installed).
 
 > Dummy IDs below (`abc123XYZ_-`, `Xyz987AbC12`) are examples only — replace with real video IDs or URLs.
 
@@ -33,6 +36,17 @@ python tools/fetch.py abc123XYZ_- --api https://shrutilipi-backend.onrender.com
 | `--out <file>` | write to a file (`-` → `<videoId>.txt`) | `python tools/fetch.py abc123XYZ_- --out transcript.txt` |
 | `--api <url>` | backend base URL (default `http://localhost:8000`) | `python tools/fetch.py abc123XYZ_- --api https://shrutilipi-backend.onrender.com` |
 | `--batch <file>` | fetch every URL in a file | `python tools/fetch.py --batch urls.txt` |
+| `--plain` | force plain output even if rich is installed | `python tools/fetch.py abc123XYZ_- --plain` |
+
+## Windows launcher — `shrutilipi.bat`
+
+```bat
+tools\shrutilipi.bat abc123XYZ_-
+tools\shrutilipi.bat --batch urls.txt
+```
+
+Forwards all args to `fetch.py` and preserves the exit code. Tip: add the
+`tools\` folder to your PATH, then just run `shrutilipi <url>` from anywhere.
 
 ## Batch mode
 

@@ -27,7 +27,9 @@ https://youtu.be/QwErTyUiOp9
 - Each video is fetched through the backend, one after another
 - Each transcript is saved as its own file named **`<videoId>.txt`** in the
   current directory (raw IDs and full URLs both resolve to the ID)
-- Progress/stats go to **stderr**, so you can watch it while files accumulate:
+- Progress/stats go to **stderr** — with `rich` installed you get a live
+  progress bar and a red/green summary table; without it, one plain line per
+  video. Either way `<videoId>.txt` files accumulate as it runs:
 
   ```
   abc123XYZ_-: 969 segments (en) -> abc123XYZ_-.txt
