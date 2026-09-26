@@ -27,6 +27,28 @@ python tools/fetch.py "https://www.youtube.com/watch?v=abc123XYZ_-"
 python tools/fetch.py abc123XYZ_- --api https://shrutilipi-backend.onrender.com
 ```
 
+## Accepted input — video ID or any URL form
+
+All of these are equivalent; the backend extracts the video ID itself:
+
+| Form | Dummy example |
+|---|---|
+| Raw 11-char video ID | `abc123XYZ_-` |
+| Full watch URL | `https://www.youtube.com/watch?v=abc123XYZ_-` |
+| Short URL | `https://youtu.be/abc123XYZ_-` |
+| Shorts / embed / live / `/v/` | `https://www.youtube.com/shorts/abc123XYZ_-` |
+
+```bash
+python tools/fetch.py abc123XYZ_-
+python tools/fetch.py "https://www.youtube.com/watch?v=abc123XYZ_-"
+python tools/fetch.py "https://youtu.be/abc123XYZ_-"
+```
+
+- **Quote full URLs** — shells treat `?` and `&` specially
+- Works the same in `--batch` files; mix IDs and URLs freely
+- Output filenames (`--out -`, batch mode) always use the **resolved video
+  ID**, never the raw URL you typed
+
 ## Flags
 
 | Flag | Meaning | Example |
