@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { TranscriptResponse } from "../lib/api";
+import ShareButtons from "./ShareButtons";
 
 function formatTime(s: number): string {
   const total = Math.max(0, Math.floor(s));
@@ -76,6 +77,7 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
         >
           Download .txt
         </button>
+        <ShareButtons videoId={data.videoId} lang={data.language} title={data.title || data.videoId} />
       </div>
 
       <div className="max-h-[480px] overflow-y-auto rounded-xl bg-zinc-50 p-4 text-sm leading-relaxed dark:bg-zinc-950">
