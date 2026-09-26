@@ -49,6 +49,9 @@ https://www.youtube.com/watch?v=Xyz987AbC12
 python tools/fetch.py --batch urls.txt
 ```
 
+**Full batch guide** — file format, output behavior, partial-failure exit
+codes, gotchas, scripting examples: [BATCH.md](BATCH.md).
+
 ## stdout vs stderr
 
 - **stdout** = transcript text only → pipes cleanly
