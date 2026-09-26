@@ -133,3 +133,26 @@ npm run build                              # must pass before shipping
 ### Frontend note
 - `apiBase()` in `frontend/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.
 - Friendly error strings live in `friendlyError()` there — add new `detail` codes to its switch.
+
+---
+
+## 8. Growth tooling (branch `feat/share-cli-seo`)
+
+### Shareable links
+- App reads `?url=<video-id-or-url>&lang=<code>` on load → prefills + auto-fetches once.
+- After a successful fetch the address bar is rewritten via `history.replaceState` to `?url=<canonical videoId>&lang=<lang>` — the current transcript result **is** the share link.
+- Root URL (`/?`) or bare `/` = clean start state (no auto-fetch).
+
+### SEO
+- `frontend/app/layout.tsx`: `metadataBase`, template title, description, keywords (`youtube to text`, `youtube transcript downloader`, …), OG + Twitter cards, canonical `/`.
+- `frontend/app/sitemap.ts` + `robots.ts` → `/sitemap.xml`, `/robots.txt` (single-page app, 1 URL).
+- **Gotcha:** `SITE_URL` constant (Vercel domain) now appears in **3 files** (`layout.tsx`, `sitemap.ts`, `robots.ts`). If the Vercel domain ever changes, update all three — or refactor to one shared constant first.
+
+### CLI helper — `tools/fetch.py`
+- Stdlib only, no installs. Talks to any backend (`--api`, default `http://localhost:8000`).
+- Transcript goes to **stdout**, stats/progress to **stderr** (pipes cleanly: `python tools/fetch.py … | pbcopy`).
+- `--out <file>` writes a file; `--out -` or `--batch` writes `<videoId>.txt` per video.
+- `--timestamps` → `[m:ss] text` lines; `--lang <code>`; `--batch <file>` = one URL/line, `#` comments.
+- Exit codes for scripting: **0** ok, **1** no captions/bad URL, **2** network/server error.
+- Verified locally: single/timestamps/out/batch/bad-id/dead-api all behave as specified.
+- Fair use: CLI hits the same free-tier quota as the web app (§3) — batch files should stay small; the prod API is not rate-limited yet, don't build heavy automation on it without discussing limits first.

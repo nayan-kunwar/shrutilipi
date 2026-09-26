@@ -1,21 +1,62 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import UrlInput from "../components/UrlInput";
 import TranscriptView from "../components/TranscriptView";
 import { fetchTranscript, type TranscriptResponse } from "../lib/api";
 
-export default function Home() {
+function HomeInner() {
+  const searchParams = useSearchParams();
   const [url, setUrl] = useState("");
   const [lang, setLang] = useState("en");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<TranscriptResponse | null>(null);
   const [dark, setDark] = useState(true);
+  const bootstrapped = useRef(false);
 
   useEffect(() => {
     setDark(document.documentElement.classList.contains("dark"));
   }, []);
+
+  async function runFetch(urlValue: string, langValue: string) {
+    if (!urlValue.trim() || loading) return;
+    setLoading(true);
+    setError(null);
+    setData(null);
+    try {
+      const result = await fetchTranscript(urlValue.trim(), langValue);
+      setData(result);
+      try {
+        const qs = `?url=${encodeURIComponent(result.videoId)}&lang=${encodeURIComponent(langValue)}`;
+        window.history.replaceState(null, "", qs);
+      } catch {
+        // history API unavailable — shareable link just won't update
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleSubmit() {
+    void runFetch(url, lang);
+  }
+
+  useEffect(() => {
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+    const presetLang = searchParams.get("lang");
+    const presetUrl = searchParams.get("url");
+    if (presetLang) setLang(presetLang);
+    if (presetUrl) {
+      setUrl(presetUrl);
+      void runFetch(presetUrl, presetLang || "en");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   function toggleTheme() {
     const next = !dark;
@@ -25,21 +66,6 @@ export default function Home() {
       localStorage.setItem("shrutilipi-theme", next ? "dark" : "light");
     } catch {
       // storage unavailable (private mode) — theme still applies for this session
-    }
-  }
-
-  async function handleSubmit() {
-    if (!url.trim() || loading) return;
-    setLoading(true);
-    setError(null);
-    setData(null);
-    try {
-      const result = await fetchTranscript(url.trim(), lang);
-      setData(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -93,5 +119,13 @@ export default function Home() {
 
       {data && <TranscriptView data={data} />}
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={null}>
+      <HomeInner />
+    </Suspense>
   );
 }
