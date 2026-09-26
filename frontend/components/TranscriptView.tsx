@@ -47,7 +47,7 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
   }
 
   return (
-    <div className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+    <div className="w-full rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{data.title || data.videoId}</p>
@@ -55,40 +55,41 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
             {data.videoId} · {data.language} · {data.segments.length} segments
           </p>
         </div>
-        <label className="flex items-center gap-1.5 text-xs text-zinc-400">
+        <label className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
           <input
             type="checkbox"
             checked={showTimestamps}
             onChange={(e) => setShowTimestamps(e.target.checked)}
+            className="accent-brand"
           />
           Timestamps
         </label>
         <button
           onClick={handleCopy}
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium hover:bg-zinc-800"
+          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium transition hover:border-brand hover:text-brand dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-brand dark:hover:text-brand"
         >
-          {copied ? "Copied ✓" : "Copy"}
+          {copied ? <span className="text-brand">Copied ✓</span> : "Copy"}
         </button>
         <button
           onClick={handleDownload}
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium hover:bg-zinc-800"
+          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium transition hover:border-brand hover:text-brand dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-brand dark:hover:text-brand"
         >
           Download .txt
         </button>
       </div>
 
-      <div className="max-h-[480px] overflow-y-auto rounded-xl bg-zinc-950 p-4 text-sm leading-relaxed">
+      <div className="max-h-[480px] overflow-y-auto rounded-xl bg-zinc-50 p-4 text-sm leading-relaxed dark:bg-zinc-950">
         {showTimestamps ? (
           <div className="space-y-1.5">
             {data.segments.map((s, i) => (
               <p key={i}>
                 <span className="mr-2 font-mono text-xs text-zinc-500">{formatTime(s.start)}</span>
-                <span className="text-zinc-200">{s.text}</span>
+                <span className="text-zinc-800 dark:text-zinc-200">{s.text}</span>
               </p>
             ))}
           </div>
         ) : (
-          <p className="whitespace-pre-wrap text-zinc-200">{data.plainText}</p>
+          <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">{data.plainText}</p>
         )}
       </div>
     </div>
