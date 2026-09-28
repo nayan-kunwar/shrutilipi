@@ -6,7 +6,7 @@ Fetch YouTube transcripts from the terminal — stdlib only, nothing to install.
 
 - Python 3
 - A running backend:
-  - **Local:** `python -m uvicorn main:app --port 8000` (from `backend/`)
+  - **Local:** `python -m uvicorn main:app --port 8000` (from `apps/api/`)
   - **Production:** pass `--api https://shrutilipi-backend.onrender.com`
 - **Optional:** `pip install rich` — unlocks colored output, batch progress bar
   and summary table. Without it the CLI still works, just plain (and `--plain`

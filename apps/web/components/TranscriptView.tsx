@@ -1,17 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { TranscriptResponse } from "../lib/api";
+import { formatTime, type TranscriptResponse } from "@shrutilipi/shared";
 import ShareButtons from "./ShareButtons";
-
-function formatTime(s: number): string {
-  const total = Math.max(0, Math.floor(s));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const sec = total % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-  return `${m}:${String(sec).padStart(2, "0")}`;
-}
 
 export default function TranscriptView({ data }: { data: TranscriptResponse }) {
   const [showTimestamps, setShowTimestamps] = useState(false);

@@ -21,19 +21,21 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 
 ## 2. Architecture
 
-- **Frontend**: Next.js 14 App Router, `frontend/`, static export (`npm run build` → `/` ≈ 3.4 kB).
-- **Backend**: FastAPI, `backend/`, Docker (`python`, 3.11). Dependencies pinned: `youtube-transcript-api==1.2.4`, `httpx==0.28.1` — hosted providers use plain `httpx`, no new deps.
+- **Monorepo**: pnpm workspaces + Turborepo. `apps/web` (Next.js) · `apps/api` (FastAPI) · `packages/shared` (API contract) · `packages/tsconfig` (base TS config). Root scripts (`pnpm dev|build|typecheck|test`) run through Turbo; `apps/api/package.json` holds thin delegating scripts so Turbo can drive the Python side too.
+- **Frontend**: Next.js 14 App Router, `apps/web/`, built by `pnpm build` (`/` ≈ 5.1 kB first-load JS ≈ 92 kB). Not a static export — default Vercel build, despite what §6 used to claim.
+- **Backend**: FastAPI, `apps/api/`, Docker (`python`, 3.11). Dependencies pinned: `youtube-transcript-api==1.2.4`, `httpx==0.28.1` — hosted providers use plain `httpx`, no new deps.
+- **Shared package**: `@shrutilipi/shared` ships raw TS (no build step). It holds `TranscriptResponse`/`TranscriptSegment`, the `TranscriptErrorDetail` union, `friendlyError()`, and `formatTime()`. Anything touching `process.env` or the network stays in `apps/web/lib/api.ts`. `next.config.js` needs `transpilePackages: ["@shrutilipi/shared"]` and `experimental.outputFileTracingRoot` set to the repo root, or the build resolves the workspace dep but misses it in the trace.
 - **API**:
   - `GET /health` → `{"ok": true}`
   - `GET /api/transcript?url=<youtube-url-or-id>&lang=<code>` → `{videoId, title, language, plainText, segments[]}` (`segments[i] = {start, duration, text}` in seconds)
-- **Cache**: in-memory TTL dict, **24h** (`CACHE_TTL` in `backend/main.py`), key `videoId:lang`. Restart clears it.
+- **Cache**: in-memory TTL dict, **24h** (`CACHE_TTL` in `apps/api/main.py`), key `videoId:lang`. Restart clears it.
 - **Title**: best-effort via YouTube oEmbed (no key); may be `null` → frontend falls back to showing `videoId`.
 
 ---
 
 ## 3. Provider chain (the core mechanism)
 
-`build_provider()` in `backend/services/providers.py` reads env at process start (not per-request — env changes need a redeploy).
+`build_provider()` in `apps/api/services/providers.py` reads env at process start (not per-request — env changes need a redeploy).
 
 ### Levels
 
@@ -67,25 +69,33 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 - **Proxy hop**: `_get_proxy_config()` returns `None` when any hosted level is active (saves 10–20s of dead-proxy retries).
 - **All keys missing**: `build_provider()` logs warning + falls back to direct captions only (correct for local dev).
 
-### Error mapping (`_map_error` in `backend/main.py`)
+### Error mapping (`_map_error` in `apps/api/main.py`)
 
 | Condition | HTTP | `detail` | Frontend copy |
 |---|---|---|---|
 | `TranscriptsNotFound` / invalid id | 404 | `no_captions` / `invalid_url` | "No captions found for this video. Try another video (Whisper fallback coming in v2)." |
 | Quota/auth/exhausted chain | 502 | `provider_unavailable` | "Transcript services are busy or out of quota — retry in a few minutes." |
-| Legacy YouTube errors (direct level) | 404/400/502 | `youtube_blocked`, etc. | existing switch in `frontend/lib/api.ts` |
+| Legacy YouTube errors (direct level) | 404/400/502 | `youtube_blocked`, etc. | existing switch in `apps/web/lib/api.ts` |
 
 ---
 
 ## 4. Render setup
 
 - `render.yaml` (root) drives env; `sync: false` vars = enter manually in **Dashboard → Environment → Secrets**.
+- **`rootDir` is `apps/api`.** Any move of the backend must be mirrored here *and* in the Render dashboard.
 - **Required manual secret:** `SUPADATA_API_KEY`.
 - Optional: `SERPAPI_API_KEY` **plus** `SERPAPI_ENABLED=true` (flag is NOT in render.yaml).
 - If `CHAIN_ORDER` doesn't auto-appear, add manually: `supadata,serpapi`.
 - Plain vars from render.yaml: `FRONTEND_URL`, `DIRECT_ENABLED=false`.
 - After env edits: **Save, rebuild, and deploy** (button shows pending-changes state while dirty).
 - Watch for unsaved-change indicator — Webshare rows were once cleared pending save; empty values are harmless (proxy hop is skipped when hosted keys exist).
+
+### Vercel setup
+
+- Root Directory **`apps/web`**. Install command is left blank — Vercel detects pnpm from the root `pnpm-lock.yaml`, and the root `package.json` `packageManager` field pins the version.
+- Only `NEXT_PUBLIC_API_URL` is needed in env.
+- If the build fails with a missing `@shrutilipi/shared`, the Root Directory is wrong (it must be `apps/web`, not the repo root, or the workspace links won't resolve).
+- `packages/shared` is workspace-linked, so Vercel needs `apps/web/node_modules` to be populated by the root install — it does this automatically, but it is the #1 thing to check when a monorepo deploy breaks.
 
 ---
 
@@ -116,23 +126,35 @@ Known-good test video: **`HHUsHkYhkcM`** (969 en segments, title via oEmbed).
 ## 7. Local dev & verification
 
 ```bash
-# backend (from backend/)
-python -m py_compile main.py services/*.py
-python -m uvicorn main:app --port 8000     # .env.example sets PORT=8000
+# once, from the repo root
+pnpm install
+
+# both apps in parallel (Turbo)
+pnpm dev
+
+# or individually
+# backend (from apps/api/)
+pnpm dev                             # uvicorn --reload --port 8000
 curl "http://127.0.0.1:8000/api/transcript?url=HHUsHkYhkcM&lang=en"
 
-# frontend (from frontend/)
-npm run dev
-npm run build                              # must pass before shipping
+# frontend (from apps/web/)
+pnpm dev
+```
+
+Gate before shipping:
+
+```bash
+pnpm typecheck        # tsc --noEmit across shared + web
+pnpm build            # shared -> web, plus a py_compile syntax check for the API
 ```
 
 - **Keyless local env = direct captions only** (correct default; your home IP isn't blocked).
 - To test chain behavior locally, export any subset of the §3 vars before starting uvicorn.
-- Unit-checks used during development (chain parse, eligibility, terminal, time-unit auto, proxy skip) — re-add as a test file if this grows.
+- Unit-checks used during development (chain parse, eligibility, terminal, time-unit auto, proxy skip) — re-add as a test file if this grows. There is **no `test` script on `apps/api` yet**, so `pnpm test` is a no-op; add one (plus `pytest` to `requirements.txt`) when the suite lands.
 
 ### Frontend note
-- `apiBase()` in `frontend/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.
-- Friendly error strings live in `friendlyError()` there — add new `detail` codes to its switch.
+- `apiBase()` in `apps/web/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.
+- `friendlyError()` and the response types now live in `@shrutilipi/shared` — add new `detail` codes to its switch, and extend the `TranscriptErrorDetail` union at the same time.
 
 ---
 
@@ -144,9 +166,9 @@ npm run build                              # must pass before shipping
 - Root URL (`/?`) or bare `/` = clean start state (no auto-fetch).
 
 ### SEO
-- `frontend/app/layout.tsx`: `metadataBase`, template title, description, keywords (`youtube to text`, `youtube transcript downloader`, …), OG + Twitter cards, canonical `/`.
-- `frontend/app/sitemap.ts` + `robots.ts` → `/sitemap.xml`, `/robots.txt` (single-page app, 1 URL).
-- **Gotcha:** `SITE_URL` constant (Vercel domain) now appears in **3 files** (`layout.tsx`, `sitemap.ts`, `robots.ts`). If the Vercel domain ever changes, update all three — or refactor to one shared constant first.
+- `apps/web/app/layout.tsx`: `metadataBase`, template title, description, keywords (`youtube to text`, `youtube transcript downloader`, …), OG + Twitter cards, canonical `/`.
+- `apps/web/app/sitemap.ts` + `robots.ts` → `/sitemap.xml`, `/robots.txt` (single-page app, 1 URL).
+- **Fixed:** `SITE_URL` used to be copy-pasted into 3 files (`layout.tsx`, `sitemap.ts`, `robots.ts`), so a domain change could silently update two of three. It now lives once in `@shrutilipi/shared` and is imported by all three.
 
 ### CLI helper — `tools/fetch.py`
 - **Full usage guide with examples: [`tools/README.md`](../tools/README.md)** (dummy IDs only).

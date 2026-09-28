@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
-
-const SITE_URL = "https://frontend-six-woad-540yl4bn2c.vercel.app";
+import { SITE_URL } from "@shrutilipi/shared";
 
 export default function robots(): MetadataRoute.Robots {
   return {

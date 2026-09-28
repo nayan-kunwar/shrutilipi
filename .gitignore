@@ -3,6 +3,8 @@ node_modules/
 out/
 *.log
 .DS_Store
+.turbo/
+*.tsbuildinfo
 
 # python
 __pycache__/
@@ -13,5 +15,5 @@ venv/
 # env
 .env
 .env.local
-frontend/.env.local
-backend/.env
+apps/web/.env.local
+apps/api/.env

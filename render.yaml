@@ -2,7 +2,7 @@ services:
   - type: web
     name: shrutilipi-backend
     runtime: docker
-    rootDir: backend
+    rootDir: apps/api
     plan: free
     envVars:
       - key: FRONTEND_URL

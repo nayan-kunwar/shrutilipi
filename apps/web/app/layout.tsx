@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
+import { SITE_URL } from "@shrutilipi/shared";
 import "./globals.css";
-
-const SITE_URL = "https://frontend-six-woad-540yl4bn2c.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
