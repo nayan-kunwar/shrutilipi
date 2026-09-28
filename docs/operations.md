@@ -13,7 +13,7 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 | Display name | **ShrutiLipi** (camel-case; never `shrutilipi` in UI copy) |
 | Code slugs | `shrutilipi`, `shrutilipi-frontend`, `shrutilipi-backend` |
 | Repo | `git@github.com-personal:nayan-kunwar/shrutilipi.git`, branch `main` |
-| Frontend | https://frontend-six-woad-540yl4bn2c.vercel.app (Vercel, **keep this domain**) |
+| Frontend | https://shrutilipi-rho.vercel.app (Vercel) |
 | Backend | https://shrutilipi-backend.onrender.com (Render free, Docker) |
 | Commit convention | Conventional commits; user says **"commit and p"** → commit + push. Never commit unasked. |
 

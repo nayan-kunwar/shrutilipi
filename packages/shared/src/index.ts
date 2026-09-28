@@ -43,7 +43,7 @@ export type TranscriptErrorDetail =
  * could silently update two of three. It lives here so there is one place to
  * edit — see docs/operations.md §8.
  */
-export const SITE_URL = "https://frontend-six-woad-540yl4bn2c.vercel.app";
+export const SITE_URL = "https://shrutilipi-rho.vercel.app";
 
 /**
  * Map an HTTP status + backend `detail` code to a sentence worth showing a user.

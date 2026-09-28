@@ -6,7 +6,7 @@ services:
     plan: free
     envVars:
       - key: FRONTEND_URL
-        value: https://frontend-six-woad-540yl4bn2c.vercel.app
+        value: https://shrutilipi-rho.vercel.app
       - key: DIRECT_ENABLED
         value: "false"
       - key: CHAIN_ORDER
