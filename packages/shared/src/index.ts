@@ -27,14 +27,15 @@ export interface TranscriptResponse {
   segments: TranscriptSegment[];
 }
 
-/** The `detail` codes `apps/api/main.py::_map_error` can return. */
+/** The `detail` codes the API can return (`_map_error` plus the rate limiter). */
 export type TranscriptErrorDetail =
   | "invalid_url"
   | "no_captions"
   | "video_unavailable"
   | "youtube_blocked"
   | "provider_unavailable"
-  | "transcript_fetch_failed";
+  | "transcript_fetch_failed"
+  | "rate_limited";
 
 /**
  * The canonical origin, used for `metadataBase`, the sitemap and robots.txt.
@@ -64,6 +65,8 @@ export function friendlyError(status: number, detail: string): string {
       return "Transcript services are busy or out of quota — retry in a few minutes.";
     case "transcript_fetch_failed":
       return "Couldn't fetch the transcript. Please retry.";
+    case "rate_limited":
+      return "You're requesting transcripts a bit too quickly — wait a minute and retry.";
     default:
       return status === 404 ? "Transcript not found for this video." : detail;
   }

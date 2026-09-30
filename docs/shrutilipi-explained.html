@@ -995,6 +995,7 @@ _TERMINAL_NAMES = {"VideoUnavailable", "VideoUnplayable", "AgeRestricted"}</pre>
         <tr><td>Deleted, private or age-restricted</td><td class="nw">404</td><td><code>video_unavailable</code></td><td>&ldquo;Video is unavailable, private, or age-restricted.&rdquo;</td></tr>
         <tr><td>YouTube blocked us</td><td class="nw">502</td><td><code>youtube_blocked</code></td><td>&ldquo;YouTube temporarily blocked the request. Wait a minute and retry.&rdquo;</td></tr>
         <tr><td>Quota, auth or network, chain exhausted</td><td class="nw">502</td><td><code>provider_unavailable</code></td><td>&ldquo;Transcript services are busy or out of quota &mdash; retry in a few minutes.&rdquo;</td></tr>
+        <tr><td>Too many requests (token bucket, cache misses only)</td><td class="nw">429</td><td><code>rate_limited</code></td><td>&ldquo;You're requesting transcripts a bit too quickly &mdash; wait a minute and retry.&rdquo; Plus a <code>Retry-After</code> header. Keyed by leftmost <code>X-Forwarded-For</code> (Render proxies); 20 req / 10 min per client via <code>RATE_LIMIT_*</code> env.</td></tr>
         <tr><td>Anything unrecognised</td><td class="nw">502</td><td><code>transcript_fetch_failed</code></td><td>&ldquo;Couldn't fetch the transcript. Please retry.&rdquo;</td></tr>
       </tbody>
     </table>
@@ -1349,9 +1350,9 @@ exit /b %errorlevel%               REM propagate exit code (0/1/2) back to cmd</
 
 <section class="sec" id="s-gaps">
   <h2><span class="num">15</span> Known gaps &amp; trade-offs</h2>
-  <p class="lead">Seven things I'd still fix, with the reasoning already formed &mdash; plus two the monorepo migration
-  already fixed (marked). Being able to criticise your own work is worth more in an interview than having nothing to
-  criticise.</p>
+  <p class="lead">Six things I'd still fix, with the reasoning already formed &mdash; plus three already fixed and marked
+  (the monorepo migration fixed two, rate limiting is the third). Being able to criticise your own work is worth more
+  in an interview than having nothing to criticise.</p>
 
   <div class="tw">
     <table class="compact">
@@ -1378,9 +1379,9 @@ exit /b %errorlevel%               REM propagate exit code (0/1/2) back to cmd</
           <td>Per-key <code>asyncio.Lock</code> or single-flight so the first request populates the cache and the rest await it. A short negative cache for misses would also protect quota.</td>
         </tr>
         <tr>
-          <td><b>No rate limiting, no auth</b></td>
+          <td><b>Rate limiting <span class="pill easy">Fixed</span>, no auth</b></td>
           <td>v1 is a public free tool; auth adds friction and there's no user model.</td>
-          <td>A per-IP token bucket on <code>/api/transcript</code> plus a <code>429</code> case in <code>friendlyError</code>. Auth is the bigger change: user records, a database, and secret management.</td>
+          <td>Rate limiting shipped: per-IP token bucket in <code>services/ratelimit.py</code> (misses only, 20 req / 10 min, <code>429 rate_limited</code> + <code>Retry-After</code>), with 16 pytest tests. Auth remains the bigger unbuilt change: user records, a database, and secret management.</td>
         </tr>
         <tr>
           <td><b>Duplicated activation logic</b></td>
@@ -2466,7 +2467,7 @@ QUESTIONS.push(
 
 {n:29,t:"Scaling & design",d:"Hard",q:"If you had a thousand users tomorrow, what breaks first?",
  p:"Prioritisation under hypothetical load. They want order and honesty, not a list of technologies.",
- a:"<p>In this order, and the first one isn't a technical problem.</p><p><b>The provider quota.</b> A thousand users against 100 requests a month is off by four orders of magnitude, and it isn't fixable with engineering &mdash; you either pay for a higher tier or self-host. Before that, though, the cache absorbs most repeat traffic, so the honest first step is measuring cache hit rate, which I currently don't do.</p><p><b>No rate limiting</b>, so one client can consume the whole quota. This is the cheapest fix in the list and it protects everyone else's quota, so it goes first.</p><p><b>Render's free tier sleeps and cold-starts.</b> A free instance idles down, so the first request after a quiet period pays a cold start &mdash; on the order of tens of seconds, which is a terrible first impression and would blow any sane timeout. Moving to a paid instance or adding a health-check pinger is a config change.</p><p><b>Connection concurrency.</b> The handlers are <code>def</code>, so FastAPI runs them in a thread pool, and each can hold a worker for up to 25 seconds on the Supadata timeout. Converting the providers to <code>httpx.AsyncClient</code> with <code>async def</code> handlers is the fix, and it's contained.</p><p><b>The cache, at scale-out.</b> Process-local means N instances means N caches and N times the upstream calls for the same popular video. Redis at that point, or a single-flight lock per instance at least.</p><p>What does <em>not</em> break: there's no database, so no connection pool saturation; no user data, so no privacy or compliance surface; and the response is a few hundred kilobytes at most, so serving it is not the problem.</p>",
+ a:"<p>In this order, and the first one isn't a technical problem.</p><p><b>The provider quota.</b> A thousand users against 100 requests a month is off by four orders of magnitude, and it isn't fixable with engineering &mdash; you either pay for a higher tier or self-host. Before that, though, the cache absorbs most repeat traffic, so the honest first step is measuring cache hit rate, which I currently don't do.</p><p><b>Rate limiting</b> has since shipped (per-IP token bucket, misses only), so the next cheapest protection is already in place — but the quota itself is still the ceiling, which is why it leads this list.</p><p><b>Render's free tier sleeps and cold-starts.</b> A free instance idles down, so the first request after a quiet period pays a cold start &mdash; on the order of tens of seconds, which is a terrible first impression and would blow any sane timeout. Moving to a paid instance or adding a health-check pinger is a config change.</p><p><b>Connection concurrency.</b> The handlers are <code>def</code>, so FastAPI runs them in a thread pool, and each can hold a worker for up to 25 seconds on the Supadata timeout. Converting the providers to <code>httpx.AsyncClient</code> with <code>async def</code> handlers is the fix, and it's contained.</p><p><b>The cache, at scale-out.</b> Process-local means N instances means N caches and N times the upstream calls for the same popular video. Redis at that point, or a single-flight lock per instance at least.</p><p>What does <em>not</em> break: there's no database, so no connection pool saturation; no user data, so no privacy or compliance surface; and the response is a few hundred kilobytes at most, so serving it is not the problem.</p>",
  f:["What would you measure first?","How would you know you're rate limiting too hard?"],
  x:"Do not jump to &quot;I'd add Redis and a load balancer.&quot; Identify the third-party quota as the ceiling and protect it with rate limiting before adding any infrastructure."},
 

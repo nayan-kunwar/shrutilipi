@@ -17,3 +17,6 @@ venv/
 .env.local
 apps/web/.env.local
 apps/api/.env
+
+# local-only docs (never commit)
+docs/roadmap.local.md

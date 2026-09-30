@@ -75,7 +75,19 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 |---|---|---|---|
 | `TranscriptsNotFound` / invalid id | 404 | `no_captions` / `invalid_url` | "No captions found for this video. Try another video (Whisper fallback coming in v2)." |
 | Quota/auth/exhausted chain | 502 | `provider_unavailable` | "Transcript services are busy or out of quota — retry in a few minutes." |
+| Rate limiter (token bucket, misses only) | 429 | `rate_limited` | "You're requesting transcripts a bit too quickly — wait a minute and retry." + `Retry-After` header |
 | Legacy YouTube errors (direct level) | 404/400/502 | `youtube_blocked`, etc. | existing switch in `apps/web/lib/api.ts` |
+
+Rate limiter notes (`apps/api/services/ratelimit.py`, wired in `main.py` after
+the cache-hit return): 20 requests per 600 s per client by default, via
+`RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS`, kill switch
+`RATE_LIMIT_ENABLED`. Key is leftmost `X-Forwarded-For` (Render proxies, so
+`client.host` would bucket the whole world together), falling back to the peer
+address locally. Cache hits and invalid URLs consume nothing — the limiter
+guards upstream spend, not raw traffic. `/health` is unlimited. Buckets are
+process-local; restart clears them (fail-open). Tests:
+`apps/api/tests/test_ratelimit.py` (`pnpm test` from root, `pytest` in
+`requirements.txt`).
 
 ---
 
@@ -150,7 +162,8 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 
 - **Keyless local env = direct captions only** (correct default; your home IP isn't blocked).
 - To test chain behavior locally, export any subset of the §3 vars before starting uvicorn.
-- Unit-checks used during development (chain parse, eligibility, terminal, time-unit auto, proxy skip) — re-add as a test file if this grows. There is **no `test` script on `apps/api` yet**, so `pnpm test` is a no-op; add one (plus `pytest` to `requirements.txt`) when the suite lands.
+- Unit-checks used during development (chain parse, eligibility, terminal, time-unit auto, proxy skip) — re-add as a test file if this grows.
+- Test suite has started: `apps/api/tests/test_ratelimit.py` (16 tests, limiter + 429 wiring), run via `pnpm test` from the root or `pytest` from `apps/api/`. `pytest` is pinned in `requirements.txt`.
 
 ### Frontend note
 - `apiBase()` in `apps/web/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.

@@ -145,7 +145,7 @@ python tools/fetch.py abc123XYZ_- > notes.txt
 |---|---|
 | `0` | success |
 | `1` | no captions / invalid URL or video ID |
-| `2` | network or server error |
+| `2` | network, server error, or rate-limited (`429 rate_limited` — transient, back off and retry; the server sends a `Retry-After` header) |
 
 ```powershell
 # PowerShell: branch on the result

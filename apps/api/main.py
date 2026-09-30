@@ -4,10 +4,11 @@ import logging
 import os
 import time
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.providers import TranscriptError, build_provider
+from services.ratelimit import build_limiter, client_key
 from services.youtube import extract_video_id
 
 logger = logging.getLogger("shrutilipi")
@@ -38,6 +39,9 @@ app.add_middleware(
 
 provider = build_provider()
 
+# Token bucket guarding upstream quota. None when RATE_LIMIT_ENABLED is off.
+limiter = build_limiter()
+
 # --- Minimal TTL cache (24h) to avoid re-hitting YouTube ---
 _CACHE: dict[str, tuple[float, dict]] = {}
 CACHE_TTL = 60 * 60 * 24
@@ -50,6 +54,7 @@ def health():
 
 @app.get("/api/transcript")
 def get_transcript(
+    request: Request,
     url: str = Query(..., description="YouTube URL or 11-char video id"),
     lang: str = Query("en", description="Preferred caption language"),
 ):
@@ -61,6 +66,22 @@ def get_transcript(
     hit = _CACHE.get(cache_key)
     if hit and (time.time() - hit[0]) < CACHE_TTL:
         return hit[1]
+
+    # Misses only: cached hits cost no upstream quota, so they cost no
+    # tokens either. The limiter therefore guards the free-tier budget
+    # directly, not raw traffic.
+    if limiter is not None:
+        key = client_key(
+            request.headers.get("x-forwarded-for"),
+            request.client.host if request.client else None,
+        )
+        retry_after = limiter.consume(key)
+        if retry_after is not None:
+            raise HTTPException(
+                status_code=429,
+                detail="rate_limited",
+                headers={"Retry-After": str(max(1, int(retry_after) + 1))},
+            )
 
     try:
         result = provider.get_transcript(video_id, lang=lang)
