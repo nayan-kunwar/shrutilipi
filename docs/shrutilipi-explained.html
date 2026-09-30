@@ -1135,7 +1135,7 @@ app.add_middleware(
     server-side log &mdash; which cost one deploy to learn, and is why <code>docs/operations.md</code> calls it out.</li>
   </ul>
 
-  <h3>All fourteen environment variables</h3>
+  <h3>All seventeen environment variables</h3>
   <div class="tw">
     <table class="compact">
       <thead><tr><th>Variable</th><th>Default</th><th>On Render</th><th>Read at</th><th>Purpose</th></tr></thead>
@@ -1153,6 +1153,9 @@ app.add_middleware(
         <tr><td><code>WEBSHARE_PROXY_USERNAME</code></td><td>&mdash;</td><td>secret, leave empty</td><td class="nw"><code>youtube.py:86</code></td><td>Legacy proxy credentials</td></tr>
         <tr><td><code>WEBSHARE_PROXY_PASSWORD</code></td><td>&mdash;</td><td>secret, leave empty</td><td class="nw"><code>youtube.py:87</code></td><td>Legacy proxy credentials</td></tr>
         <tr><td><code>WEBSHARE_PROXY_HOSTS</code></td><td>&mdash;</td><td>secret, leave empty</td><td class="nw"><code>youtube.py:88</code></td><td>Legacy <code>host:port</code> list</td></tr>
+        <tr><td><code>RATE_LIMIT_ENABLED</code></td><td><code>true</code></td><td>unset</td><td class="nw"><code>ratelimit.py:120</code></td><td>Kill switch: <code>0</code>/<code>false</code>/<code>no</code>/<code>off</code> disables the limiter</td></tr>
+        <tr><td><code>RATE_LIMIT_REQUESTS</code></td><td><code>20</code></td><td>unset</td><td class="nw"><code>ratelimit.py:124</code></td><td>Bucket capacity per client per window</td></tr>
+        <tr><td><code>RATE_LIMIT_WINDOW_SECONDS</code></td><td><code>600</code></td><td>unset</td><td class="nw"><code>ratelimit.py:125</code></td><td>Refill window in seconds; misses only, <code>/health</code> unlimited</td></tr>
         <tr><td><code>NEXT_PUBLIC_API_URL</code></td><td><code>http://localhost:8000</code></td><td>Vercel env</td><td class="nw"><code>lib/api.ts:3</code></td><td>Browser-visible API base</td></tr>
       </tbody>
     </table>

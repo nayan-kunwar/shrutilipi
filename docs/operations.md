@@ -59,6 +59,9 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 | `FRONTEND_URL` | — | Vercel URL (plain, not secret) | CORS allow-origin. **Must** match Vercel domain exactly or requests fail. |
 | `WEBSHARE_PROXY_USERNAME/PASSWORD/HOSTS` | — | **leave empty** | Free proxies are dead (`Connection refused` + YouTube blocks datacenter IPs). Kept as legacy only. |
 | `WEBSHARE_PROXY_LIST` | — | — | Alternative: comma-separated full proxy URLs |
+| `RATE_LIMIT_ENABLED` | `true` | leave unset | Kill switch: `0`/`false`/`no`/`off` disables the limiter |
+| `RATE_LIMIT_REQUESTS` | `20` | leave unset | Bucket capacity per client per window |
+| `RATE_LIMIT_WINDOW_SECONDS` | `600` | leave unset | Refill window in seconds (20 per 10 min); misses only, `/health` unlimited |
 
 ### Chain semantics
 
@@ -189,6 +192,6 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 - Transcript goes to **stdout**, stats/progress to **stderr** (pipes cleanly: `python tools/fetch.py … | pbcopy`).
 - `--out <file>` writes a file; `--out -` or `--batch` writes `<videoId>.txt` per video.
 - `--timestamps` → `[m:ss] text` lines; `--lang <code>`; `--batch <file>` = one URL/line, `#` comments.
-- Exit codes for scripting: **0** ok, **1** no captions/bad URL, **2** network/server error.
+- Exit codes for scripting: **0** ok, **1** no captions/bad URL, **2** network/server error or rate-limited (`429` — transient, respect `Retry-After`).
 - Verified locally: single/timestamps/out/batch/bad-id/dead-api all behave as specified.
-- Fair use: CLI hits the same free-tier quota as the web app (§3) — batch files should stay small; the prod API is not rate-limited yet, don't build heavy automation on it without discussing limits first.
+- Fair use: CLI hits the same free-tier quota as the web app (§3) — batch files should stay small. The prod API **is** rate-limited (20 req / 10 min per IP, `429 rate_limited` with `Retry-After`); automation must back off on 429 rather than retrying blindly. Don't build heavy automation on it without discussing limits first.
