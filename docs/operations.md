@@ -116,7 +116,8 @@ frontend softens this (`apps/web`):
   on tab-return / first interaction if the last ping is >5 min old, and every 10 min while the tab is visible
   (under Render's 15-min sleep timer). One ping in flight at a time; hidden tabs skip the interval.
 - `ServerStatus` pill — silent when warm; amber "Waking up the API…" once a ping runs >2.5 s; green "API awake"
-  for 3 s after a slow wake or a retry; red with **Try again** when unreachable.
+  for 3 s after a slow wake or a retry; a neutral banner with a **Wake up the server** button when unreachable
+  (a call to action, deliberately not styled as an error).
 - A slow transcript fetch switches the loading copy after 3 s, and the error card has a **Retry** button.
 
 Tradeoff: a visible tab keeps the instance awake — bounded by real visits, unlike a 24/7 cron pinger, which would

@@ -6,8 +6,10 @@ import type { ServerWakeStatus } from "../lib/useServerWake";
 /**
  * Slim status pill for the free-tier cold-start wake-up.
  *
- * Silent in `checking`; shows "warming" once a ping runs long; after a
- * genuinely slow wake it confirms "ready" for a moment, then fades away.
+ * Silent in `checking`; shows "warming" once a ping runs long; when the API
+ * is unreachable it offers a "Wake up the server" button — guidance, not an
+ * error; after a slow wake or a manual wake it confirms "ready" for a moment,
+ * then fades away.
  */
 export default function ServerStatus({
   status,
@@ -55,14 +57,14 @@ export default function ServerStatus({
       <div
         role="status"
         aria-live="polite"
-        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
       >
-        <span>Couldn&rsquo;t reach the API &mdash; it may be starting up.</span>
+        <span>The API is asleep &mdash; it runs on a free tier. Wake it up to continue:</span>
         <button
           onClick={onRetry}
-          className="shrink-0 rounded-lg border border-red-300 px-2.5 py-1 font-medium transition hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950"
+          className="shrink-0 rounded-lg bg-brand px-3 py-1 font-semibold text-white transition hover:bg-brand-dark"
         >
-          Try again
+          Wake up the server
         </button>
       </div>
     );
