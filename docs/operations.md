@@ -105,6 +105,23 @@ process-local; restart clears them (fail-open). Tests:
 - After env edits: **Save, rebuild, and deploy** (button shows pending-changes state while dirty).
 - Watch for unsaved-change indicator — Webshare rows were once cleared pending save; empty values are harmless (proxy hop is skipped when hosted keys exist).
 
+### Cold starts & wake-up UX (free tier)
+
+Render free instances spin down after ~15 min idle; the first request after that pays a ~30 s cold start. The
+frontend softens this (`apps/web`):
+
+- `pingHealth()` (`lib/api.ts`) — `GET /health`; its arrival starts a boot and it costs nothing upstream (no
+  provider call, no rate-limit tokens, CORS-allowed).
+- `useServerWake()` (`lib/useServerWake.ts`) — pings on page load (boot starts while the user is still pasting),
+  on tab-return / first interaction if the last ping is >5 min old, and every 10 min while the tab is visible
+  (under Render's 15-min sleep timer). One ping in flight at a time; hidden tabs skip the interval.
+- `ServerStatus` pill — silent when warm; amber "Waking up the API…" once a ping runs >2.5 s; green "API awake"
+  for 3 s after a slow wake or a retry; red with **Try again** when unreachable.
+- A slow transcript fetch switches the loading copy after 3 s, and the error card has a **Retry** button.
+
+Tradeoff: a visible tab keeps the instance awake — bounded by real visits, unlike a 24/7 cron pinger, which would
+burn free instance hours and hide the problem rather than surface it.
+
 ### Vercel setup
 
 - Root Directory **`apps/web`**. Install command is left blank — Vercel detects pnpm from the root `pnpm-lock.yaml`, and the root `package.json` `packageManager` field pins the version.
@@ -171,6 +188,7 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 ### Frontend note
 - `apiBase()` in `apps/web/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.
 - `friendlyError()` and the response types now live in `@shrutilipi/shared` — add new `detail` codes to its switch, and extend the `TranscriptErrorDetail` union at the same time.
+- Cold-start wake probe: `pingHealth()` in the same file; `useServerWake` + `ServerStatus` drive the pill (§4). No backend change needed — `/health` is already outside the limiter.
 
 ---
 

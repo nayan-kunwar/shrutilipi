@@ -5,6 +5,25 @@ function apiBase(): string {
   return base.replace(/\/$/, "");
 }
 
+/**
+ * Wake/keep-warm probe for the Render free instance.
+ *
+ * A GET /health costs nothing upstream (no provider call, not rate-limited)
+ * and its mere arrival starts a boot if the instance is asleep. Render holds
+ * the request open while the instance starts, so the timeout is generous.
+ */
+export async function pingHealth(timeoutMs = 120_000): Promise<boolean> {
+  try {
+    const res = await fetch(`${apiBase()}/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchTranscript(url: string, lang = "en"): Promise<TranscriptResponse> {
   const res = await fetch(
     `${apiBase()}/api/transcript?url=${encodeURIComponent(url)}&lang=${encodeURIComponent(lang)}`,

@@ -4,21 +4,33 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import UrlInput from "../components/UrlInput";
 import TranscriptView from "../components/TranscriptView";
+import ServerStatus from "../components/ServerStatus";
 import { fetchTranscript, type TranscriptResponse } from "../lib/api";
+import { useServerWake } from "../lib/useServerWake";
 
 function HomeInner() {
   const searchParams = useSearchParams();
   const [url, setUrl] = useState("");
   const [lang, setLang] = useState("en");
   const [loading, setLoading] = useState(false);
+  const [loadingSeconds, setLoadingSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<TranscriptResponse | null>(null);
   const [dark, setDark] = useState(true);
   const bootstrapped = useRef(false);
+  const { status: serverStatus, wake, retry: retryWake } = useServerWake();
 
   useEffect(() => {
     setDark(document.documentElement.classList.contains("dark"));
   }, []);
+
+  // Tick while fetching so slow requests can explain the free-tier cold start.
+  useEffect(() => {
+    if (!loading) return;
+    setLoadingSeconds(0);
+    const id = window.setInterval(() => setLoadingSeconds((s) => s + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [loading]);
 
   async function runFetch(urlValue: string, langValue: string) {
     if (!urlValue.trim() || loading) return;
@@ -42,6 +54,7 @@ function HomeInner() {
   }
 
   function handleSubmit() {
+    wake();
     void runFetch(url, lang);
   }
 
@@ -96,24 +109,39 @@ function HomeInner() {
         </p>
       </header>
 
+      <ServerStatus status={serverStatus} onRetry={retryWake} />
+
       <UrlInput
         url={url}
         lang={lang}
         loading={loading}
-        onUrlChange={setUrl}
+        onUrlChange={(v) => {
+          setUrl(v);
+          wake();
+        }}
         onLangChange={setLang}
         onSubmit={handleSubmit}
       />
 
       {loading && (
         <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-          Fetching captions…
+          {loadingSeconds >= 3
+            ? "Still working — the free-tier server may be waking up. The first request after idle can take ~30s…"
+            : "Fetching captions…"}
         </div>
       )}
 
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-          {error}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          <span>{error}</span>
+          {url.trim() && (
+            <button
+              onClick={handleSubmit}
+              className="shrink-0 rounded-lg border border-red-300 px-3 py-1 font-medium transition hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 

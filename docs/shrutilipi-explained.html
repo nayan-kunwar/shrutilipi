@@ -457,24 +457,28 @@ summary:hover{background:var(--bg-soft)}
 
 <section class="sec" id="s-map">
   <h2><span class="num">04</span> Repo map</h2>
-  <p class="lead">Every hand-written file, what it's for, and how big it is. Total &asymp; 2,189 lines.</p>
+  <p class="lead">Every hand-written file, what it's for, and how big it is. Total &asymp; 2,834 lines.</p>
 
   <div class="tw">
     <table class="compact">
       <thead><tr><th>File</th><th class="nw">Lines</th><th>Responsibility</th></tr></thead>
       <tbody>
-        <tr class="grp"><td colspan="3">Backend &mdash; 645 Python lines + workspace shim</td></tr>
-        <tr><td class="nw"><code>apps/api/main.py</code></td><td class="nw">119</td><td>App, CORS, two routes, TTL cache, <code>_map_error</code></td></tr>
+        <tr class="grp"><td colspan="3">Backend &mdash; 997 Python lines + workspace shim</td></tr>
+        <tr><td class="nw"><code>apps/api/main.py</code></td><td class="nw">140</td><td>App, CORS, two routes, TTL cache, rate-limit gate, <code>_map_error</code></td></tr>
+        <tr><td class="nw"><code>apps/api/services/ratelimit.py</code></td><td class="nw">132</td><td>Per-IP token bucket (stdlib only), XFF client key, env factory, kill switch</td></tr>
         <tr><td class="nw"><code>apps/api/services/providers.py</code></td><td class="nw">369</td><td><b>The centrepiece.</b> ABC, three providers, chain, error taxonomy, factory</td></tr>
         <tr><td class="nw"><code>apps/api/services/youtube.py</code></td><td class="nw">157</td><td>Video-ID regex ladder, oEmbed title, caption fetch, proxy config</td></tr>
+        <tr><td class="nw"><code>apps/api/tests/test_ratelimit.py</code></td><td class="nw">199</td><td>16 pytest cases: bucket maths, key extraction, env parsing, TestClient 429 shape</td></tr>
         <tr><td class="nw"><code>apps/api/Dockerfile</code></td><td class="nw">12</td><td><code>python:3.11-slim</code>, uvicorn on <code>${PORT:-8000}</code></td></tr>
-        <tr><td class="nw"><code>apps/api/requirements.txt</code></td><td class="nw">4</td><td>fastapi, uvicorn[standard], youtube-transcript-api, httpx &mdash; all pinned</td></tr>
-        <tr><td class="nw"><code>apps/api/package.json</code></td><td class="nw">12</td><td>Thin Turbo shim &mdash; <code>dev</code>/<code>build</code> delegate to uvicorn / <code>py_compile</code>. No Python changes.</td></tr>
-        <tr class="grp"><td colspan="3">Frontend &mdash; 543 TS/TSX + 19 CSS + 56 config</td></tr>
-        <tr><td class="nw"><code>apps/web/app/page.tsx</code></td><td class="nw">131</td><td>Client state machine, bootstrap from query string, theme toggle</td></tr>
+        <tr><td class="nw"><code>apps/api/requirements.txt</code></td><td class="nw">5</td><td>fastapi, uvicorn[standard], youtube-transcript-api, httpx, pytest &mdash; all pinned</td></tr>
+        <tr><td class="nw"><code>apps/api/package.json</code></td><td class="nw">13</td><td>Thin Turbo shim &mdash; <code>dev</code>/<code>test</code> delegate to uvicorn / pytest; <code>build</code> is a <code>py_compile</code> syntax check</td></tr>
+        <tr class="grp"><td colspan="3">Frontend &mdash; 815 TS/TSX + 19 CSS + 56 config</td></tr>
+        <tr><td class="nw"><code>apps/web/app/page.tsx</code></td><td class="nw">159</td><td>Client state machine, bootstrap from query string, theme toggle, cold-start wake wiring</td></tr>
         <tr><td class="nw"><code>apps/web/components/ShareButtons.tsx</code></td><td class="nw">160</td><td>Five share targets plus copy link, no client SDKs</td></tr>
         <tr><td class="nw"><code>apps/web/components/TranscriptView.tsx</code></td><td class="nw">90</td><td>Render, timestamps toggle, copy, download <code>.txt</code> (<code>formatTime</code> moved to shared)</td></tr>
-        <tr><td class="nw"><code>apps/web/lib/api.ts</code></td><td class="nw">26</td><td><code>apiBase</code> + <code>fetchTranscript</code> only &mdash; types and <code>friendlyError</code> moved to shared</td></tr>
+        <tr><td class="nw"><code>apps/web/components/ServerStatus.tsx</code></td><td class="nw">124</td><td>Waking / awake / unreachable pill with retry &mdash; silent when the API is already warm</td></tr>
+        <tr><td class="nw"><code>apps/web/lib/useServerWake.ts</code></td><td class="nw">101</td><td>Wake hook: ping on load, on tab return / first interaction, keep-warm while visible</td></tr>
+        <tr><td class="nw"><code>apps/web/lib/api.ts</code></td><td class="nw">45</td><td><code>apiBase</code> + <code>pingHealth</code> (wake probe) + <code>fetchTranscript</code> &mdash; types and <code>friendlyError</code> live in shared</td></tr>
         <tr><td class="nw"><code>apps/web/app/layout.tsx</code></td><td class="nw">61</td><td>SEO metadata, anti-FOUC theme script (<code>SITE_URL</code> imported from shared)</td></tr>
         <tr><td class="nw"><code>apps/web/components/UrlInput.tsx</code></td><td class="nw">53</td><td>Input, language <code>&lt;select&gt;</code>, submit</td></tr>
         <tr><td class="nw"><code>apps/web/app/globals.css</code></td><td class="nw">19</td><td>Tailwind directives, <code>color-scheme</code>, <code>::selection</code></td></tr>
@@ -483,8 +487,8 @@ summary:hover{background:var(--bg-soft)}
         <tr><td class="nw"><code>apps/web/package.json</code></td><td class="nw">28</td><td>Now <code>@shrutilipi/web</code>; depends on shared via <code>workspace:*</code>; has a <code>typecheck</code> script</td></tr>
         <tr><td class="nw"><code>apps/web/tsconfig.json</code></td><td class="nw">11</td><td>Extends the shared base; keeps <code>jsx: preserve</code> + Next plugin</td></tr>
         <tr><td class="nw"><code>apps/web/next.config.js</code></td><td class="nw">17</td><td><code>transpilePackages</code> + <code>outputFileTracingRoot</code> &mdash; both required for the monorepo build</td></tr>
-        <tr class="grp"><td colspan="3">Shared packages + workspace root &mdash; 181 lines</td></tr>
-        <tr><td class="nw"><code>packages/shared/src/index.ts</code></td><td class="nw">80</td><td><b>The contract.</b> Response types, <code>TranscriptErrorDetail</code>, <code>friendlyError</code>, <code>formatTime</code>, <code>SITE_URL</code></td></tr>
+        <tr class="grp"><td colspan="3">Shared packages + workspace root &mdash; 184 lines</td></tr>
+        <tr><td class="nw"><code>packages/shared/src/index.ts</code></td><td class="nw">83</td><td><b>The contract.</b> Response types, <code>TranscriptErrorDetail</code> (incl. <code>rate_limited</code>), <code>friendlyError</code>, <code>formatTime</code>, <code>SITE_URL</code></td></tr>
         <tr><td class="nw"><code>packages/shared/package.json</code></td><td class="nw">20</td><td><code>@shrutilipi/shared</code>; ships raw TS, no build step</td></tr>
         <tr><td class="nw"><code>packages/shared/tsconfig.json</code></td><td class="nw">5</td><td>Extends the shared base</td></tr>
         <tr><td class="nw"><code>packages/tsconfig/base.json</code></td><td class="nw">16</td><td><code>@shrutilipi/tsconfig</code> &mdash; strict, bundler resolution, shared by web + shared</td></tr>
@@ -495,7 +499,7 @@ summary:hover{background:var(--bg-soft)}
         <tr class="grp"><td colspan="3">CLI, config &amp; docs &mdash; 717 lines</td></tr>
         <tr><td class="nw"><code>tools/fetch.py</code></td><td class="nw">184</td><td>argparse CLI, single + batch, rich-optional output, exit codes</td></tr>
         <tr><td class="nw"><code>tools/README.md</code></td><td class="nw">164</td><td>Full CLI usage guide with dummy IDs only</td></tr>
-        <tr><td class="nw"><code>docs/operations.md</code></td><td class="nw">181</td><td><b>Best doc in the repo.</b> Env tables, chain semantics, deploy runbook, known issues with root causes</td></tr>
+        <tr><td class="nw"><code>docs/operations.md</code></td><td class="nw">197</td><td><b>Best doc in the repo.</b> Env tables, chain semantics, deploy runbook, known issues with root causes</td></tr>
         <tr><td class="nw"><code>tools/BATCH.md</code></td><td class="nw">89</td><td>Batch-mode deep dive</td></tr>
         <tr><td class="nw"><code>README.md</code></td><td class="nw">73</td><td>Quickstart via <code>pnpm</code> + Turbo, deploy, v2 note</td></tr>
         <tr><td class="nw"><code>render.yaml</code></td><td class="nw">23</td><td>Render Blueprint: <code>rootDir: apps/api</code>, plan, eight env vars</td></tr>
@@ -519,30 +523,35 @@ summary:hover{background:var(--bg-soft)}
 
   <div class="callout gap">
     <b class="lbl">Not present &mdash; and that is a talking point</b>
-    No <code>tests/</code>, no <code>.github/</code> (so no CI), no <code>pyproject.toml</code>, no ESLint or Prettier
-    config, no <code>Makefile</code>. <code>docs/operations.md:153</code> is honest about it: five behaviours were
-    hand-verified during development (chain parsing, <code>handles_missing</code> eligibility, terminal short-circuit,
-    SerpApi time-unit inference, proxy skip) and the doc says &ldquo;re-add as a test file if this grows.&rdquo;
+    No <code>.github/</code> (so no CI), no <code>pyproject.toml</code>, no ESLint or Prettier config, no
+    <code>Makefile</code>. Tests have started: <code>apps/api/tests/test_ratelimit.py</code> pins the limiter and its
+    429 wiring (16 cases, <code>pnpm test</code>). The chain's hand-verified behaviours (chain parsing,
+    <code>handles_missing</code> eligibility, terminal short-circuit, SerpApi time-unit inference, proxy skip) still
+    need the same treatment &mdash; <code>operations.md:168</code> says &ldquo;re-add as a test file if this grows.&rdquo;
   </div>
 </section>
 <section class="sec" id="s-flow">
   <h2><span class="num">05</span> Data flow</h2>
   <p class="lead">The whole request, end to end, with the exact code that does each step.</p>
 
-  <div class="codewrap"><button class="copy" type="button">copy</button><pre>USER
+  <div class="codewrap"><button class="copy" type="button">copy</button><pre>[0] useServerWake.ts  GET /health on page load -> starts the free-instance boot
+ |  visible tab: re-ping every 10 min; the status pill explains any slow wake
+ v
+USER
  |  pastes URL  (or lands on /?url=&lt;id&gt;&amp;lang=&lt;code&gt;)
  v
-[1] page.tsx:48-59  bootstrap effect, guarded by the bootstrapped ref
+[1] page.tsx:61-72  bootstrap effect, guarded by the bootstrapped ref
  |  reads ?url= and ?lang=, setUrl(), auto-fetches ONCE
  v
-[2] page.tsx:23  runFetch() -- re-entrancy guard, setLoading, clear error + data
+[2] page.tsx:35  runFetch() -- re-entrancy guard, setLoading, clear error + data
  v
-[3] lib/api.ts:8  fetchTranscript() -> GET {NEXT_PUBLIC_API_URL}/api/transcript
+[3] lib/api.ts:27  fetchTranscript() -> GET {NEXT_PUBLIC_API_URL}/api/transcript
  |  cache: "no-store"   .   CORS preflight: GET, no custom headers
  v
-[4] main.py:51  get_transcript()
+[4] main.py:55  get_transcript()
  |  |-- youtube.py:27  extract_video_id()  4-regex ladder -> 400 invalid_url if None
- |  `-- main.py:60     cache hit on "videoId:lang" and age < 24h ? -> return immediately
+ |  |-- main.py:65     cache hit on "videoId:lang" and age < 24h ? -> return immediately
+ |  `-- cache miss -> ratelimit.py:92  token bucket -> 429 rate_limited if empty
  v
 [5] providers.py:293  FallbackProvider.get_transcript()   <-- the interesting part
  |  for each level in CHAIN_ORDER:
@@ -551,7 +560,7 @@ summary:hover{background:var(--bg-soft)}
  |     missing?               -> drop remaining levels with handles_missing = False
  |     blocked/quota/network? -> fall through
  v
-[6] main.py:74  build payload  {videoId, title, language, plainText, segments[]}
+[6] main.py:95  build payload  {videoId, title, language, plainText, segments[]}
  |  _CACHE["videoId:lang"] = (now, payload)   <-- only on success; failures never poison it
  v
 [7] page.tsx:31  setData(result), then history.replaceState(?url=&lt;canonical id&gt;&amp;lang=&lt;lang&gt;)
@@ -1178,8 +1187,10 @@ const [error, setError] = useState&lt;string | null&gt;(null);
 const [data, setData] = useState&lt;TranscriptResponse | null&gt;(null);
 const [dark, setDark] = useState(true);
 const bootstrapped = useRef(false);        // &lt;- a REF, not state. See below.</pre></div>
-  <p>Rendering is a flat four-branch conditional with no state-machine library: <code>&lt;UrlInput&gt;</code> always,
-  then exactly one of the loading card, the error card, or <code>&lt;TranscriptView&gt;</code>.</p>
+  <p>Rendering is a flat conditional with no state-machine library: <code>&lt;ServerStatus&gt;</code> (invisible unless
+  the free instance is waking or unreachable) and <code>&lt;UrlInput&gt;</code> always, then exactly one of the loading
+  card, the error card, or <code>&lt;TranscriptView&gt;</code>. The error card gained a retry button, and the loading
+  card switches its copy after 3 s to name the cold-start possibility instead of pretending to be fast.</p>
 
   <h3>The once-only bootstrap</h3>
   <div class="codewrap"><button class="copy" type="button">copy</button><pre>useEffect(() =&gt; {
@@ -1344,8 +1355,9 @@ exit /b %errorlevel%               REM propagate exit code (0/1/2) back to cmd</
       <div class="callout warn" style="margin-top:.6rem">
         <b class="lbl">Fair-use note to repeat if asked</b>
         &ldquo;The CLI hits the same free-tier quota as the web app &mdash; 100 requests a month on Supadata's free tier.
-        Batch files should stay small, and I'd talk about limits before building heavy automation on the public API,
-        because there's no rate limiting yet.&rdquo;
+        Batch files should stay small, and the CLI respects the same rate limiter as the browser: hit it too fast and
+        you get a <code>429 rate_limited</code> with a <code>Retry-After</code> header, so automation should back off
+        rather than retry blindly.&rdquo;
       </div>
     </div>
   </details>
@@ -1353,17 +1365,18 @@ exit /b %errorlevel%               REM propagate exit code (0/1/2) back to cmd</
 
 <section class="sec" id="s-gaps">
   <h2><span class="num">15</span> Known gaps &amp; trade-offs</h2>
-  <p class="lead">Six things I'd still fix, with the reasoning already formed &mdash; plus three already fixed and marked
-  (the monorepo migration fixed two, rate limiting is the third). Being able to criticise your own work is worth more
-  in an interview than having nothing to criticise.</p>
+  <p class="lead">Six things I'd still fix, with the reasoning already formed &mdash; plus four already improved and
+  marked: three fixed in code (the monorepo migration fixed two, rate limiting the third) and cold starts now
+  mitigated by a wake-up UI. Being able to criticise your own work is worth more in an interview than having nothing
+  to criticise.</p>
 
   <div class="tw">
     <table class="compact">
       <thead><tr><th>Gap</th><th>Why it exists</th><th>How I'd fix it</th></tr></thead>
       <tbody>
         <tr>
-          <td><b>No tests</b></td>
-          <td>Five behaviours were hand-verified; <code>operations.md:153</code> admits it. The chain logic is pure functions of (chain, outcome) &mdash; the easiest possible test target.</td>
+          <td><b>No tests for the chain</b></td>
+          <td>The limiter has 16 pytest cases, but the chain has none: five behaviours were hand-verified and <code>operations.md:168</code> admits it. The chain logic is pure functions of (chain, outcome) &mdash; the easiest possible test target.</td>
           <td><code>pytest</code> against <code>build_provider()</code> with <code>monkeypatch.setenv</code> (five table-driven cases), <code>FallbackProvider</code> with stub levels (six failure paths), <code>_normalize_serpapi</code> units, and <code>extract_video_id</code> for all four URL shapes. A few hours for a large confidence gain.</td>
         </tr>
         <tr>
@@ -1385,6 +1398,11 @@ exit /b %errorlevel%               REM propagate exit code (0/1/2) back to cmd</
           <td><b>Rate limiting <span class="pill easy">Fixed</span>, no auth</b></td>
           <td>v1 is a public free tool; auth adds friction and there's no user model.</td>
           <td>Rate limiting shipped: per-IP token bucket in <code>services/ratelimit.py</code> (misses only, 20 req / 10 min, <code>429 rate_limited</code> + <code>Retry-After</code>), with 16 pytest tests. Auth remains the bigger unbuilt change: user records, a database, and secret management.</td>
+        </tr>
+        <tr>
+          <td><b>Cold starts on the free instance</b> <span class="pill easy">Mitigated</span></td>
+          <td>Render's free tier sleeps after ~15 min idle; the next request pays ~30 s. Nothing in the UI said so &mdash; it just looked broken.</td>
+          <td>Wake-up UX shipped: <code>pingHealth()</code> on page load starts the boot while the user pastes, a visible tab re-pings every 10 min (under the sleep timer), a status pill explains a slow wake, and slow fetches / errors offer context plus retry. A paid instance is the real fix; a cron pinger would hide the problem instead.</td>
         </tr>
         <tr>
           <td><b>Duplicated activation logic</b></td>
@@ -1787,7 +1805,7 @@ function initSearch(){
 var STEPS = [
   {
     t: "Land on the page &mdash; URL becomes state",
-    w: "apps/web/app/page.tsx:48-59",
+    w: "apps/web/app/page.tsx:61-72",
     b: [
       "The app reads <code>?url=</code> and <code>?lang=</code> from the query string on mount.",
       "A <code>bootstrapped</code> ref makes the effect fire exactly once, so a re-render can never trigger a second fetch (which would double-spend provider quota).",
@@ -1798,7 +1816,7 @@ var STEPS = [
   },
   {
     t: "Submit &mdash; re-entrancy guard",
-    w: "apps/web/app/page.tsx:23",
+    w: "apps/web/app/page.tsx:35",
     b: [
       "<code>runFetch()</code> returns early if the input is blank <em>or</em> a request is already in flight.",
       "Loading is set, and the previous error and result are both cleared so the UI can't show a stale transcript next to a new spinner.",
@@ -1808,7 +1826,7 @@ var STEPS = [
   },
   {
     t: "HTTP request from the browser",
-    w: "apps/web/lib/api.ts:8",
+    w: "apps/web/lib/api.ts:27",
     b: [
       "<code>apiBase()</code> reads <code>NEXT_PUBLIC_API_URL</code>, defaulting to <code>http://localhost:8000</code> in code and stripping any trailing slash.",
       "Params are <code>url</code> and <code>lang</code>, both <code>encodeURIComponent</code>-escaped.",
@@ -1819,7 +1837,7 @@ var STEPS = [
   },
   {
     t: "Validate the ID, then check the cache",
-    w: "apps/api/main.py:51-63",
+    w: "apps/api/main.py:55-68",
     b: [
       "<code>extract_video_id()</code> tries four regex patterns in order: <code>watch?v=</code>, <code>youtu.be/</code>, <code>/shorts|embed|live|v/</code>, then a bare 11-character ID.",
       "If nothing matches, <code>400 invalid_url</code> immediately &mdash; no provider call is made.",
@@ -1852,7 +1870,7 @@ var STEPS = [
   },
   {
     t: "Build the payload and cache it",
-    w: "apps/api/main.py:71-82",
+    w: "apps/api/main.py:95-103",
     b: [
       "An empty <code>segments</code> list that somehow reached here becomes <code>404 no_captions</code>.",
       "<code>plainText</code> comes from the <code>plain_text</code> property, which joins <code>segments</code> &mdash; it is never stored separately, so it can't drift.",
@@ -1862,7 +1880,7 @@ var STEPS = [
   },
   {
     t: "Render, and make the result shareable",
-    w: "apps/web/app/page.tsx:31, components/TranscriptView.tsx",
+    w: "apps/web/app/page.tsx:42, components/TranscriptView.tsx",
     b: [
       "On success the address bar is rewritten with <code>history.replaceState</code> to the <b>canonical resolved video ID</b>.",
       "So a <code>youtu.be</code> short link, a full watch URL and a raw ID all converge on <code>/?url=&lt;id&gt;&amp;lang=&lt;code&gt;</code>. The current result <em>is</em> the share link.",
@@ -2341,10 +2359,10 @@ var QUESTIONS = [
  x:"Do not say you sanitise the input. The right instinct here was to normalise aggressively (extract 11 characters) and then use that canonical value as the cache key, rather than to validate everything to death."},
 
 {n:8,t:"API & FastAPI",d:"Medium",q:"How do you test this API?",
- p:"A trap question, because the honest answer is that there is no test suite. This is a chance to show self-awareness and then demonstrate you know exactly what you'd write.",
- a:"<p>Honest answer: there are no automated tests right now. I hand-verified five behaviours during development &mdash; chain-order parsing, <code>handles_missing</code> eligibility, terminal short-circuiting, the SerpApi time-unit inference and the proxy skip &mdash; and <code>docs/operations.md</code> says those should be re-added as a test file if the project grows. So I know exactly which parts are unverified, and they happen to be the highest-value parts to verify.</p><p>What I'd write, in order. First, <code>test_build_provider</code>: table-driven, with <code>monkeypatch.setenv</code>, covering the three return branches, keyless local dev, the <code>SERPAPI_ENABLED</code>-defaults-false gotcha, and unknown names in <code>CHAIN_ORDER</code>. That's pure logic with no network. Second, <code>test_fallback_provider</code> with stub levels &mdash; I can assert narrow, fall-through, short-circuit and exhaustion without touching YouTube or Supadata at all, which is the whole point of the ABC. Third, <code>test_extract_video_id</code> for the four URL shapes, and <code>test_normalize_serpapi</code> for the seconds-versus-ms heuristic.</p><p>What I would <em>not</em> do is mock <code>httpx</code> for the hosted providers. Those tests would assert my own assumptions about a third party's response shape, which is the definition of a test that passes while the product is broken. The real integration test is a request against the known-good video <code>HHUsHkYhkcM</code>, which <code>operations.md</code> already documents as the smoke test.</p>",
+ p:"A chance to show self-awareness: be exact about what has tests (the rate limiter) and what doesn't (the chain), then demonstrate you know exactly what you'd write next.",
+ a:"<p>Honest answer, in two parts. The rate limiter has a real suite: 16 pytest cases in <code>apps/api/tests/test_ratelimit.py</code> covering the token-bucket maths with an injectable clock, client-key extraction, env parsing, and two <code>TestClient</code> proofs (the 429 shape with <code>Retry-After</code>, and cached hits consuming nothing). The provider chain has none &mdash; I hand-verified five behaviours during development &mdash; chain-order parsing, <code>handles_missing</code> eligibility, terminal short-circuiting, the SerpApi time-unit inference and the proxy skip &mdash; and <code>docs/operations.md</code> says those should be re-added as a test file if the project grows. So I know exactly which parts are unverified, and they happen to be the highest-value parts to verify.</p><p>What I'd write, in order. First, <code>test_build_provider</code>: table-driven, with <code>monkeypatch.setenv</code>, covering the three return branches, keyless local dev, the <code>SERPAPI_ENABLED</code>-defaults-false gotcha, and unknown names in <code>CHAIN_ORDER</code>. That's pure logic with no network. Second, <code>test_fallback_provider</code> with stub levels &mdash; I can assert narrow, fall-through, short-circuit and exhaustion without touching YouTube or Supadata at all, which is the whole point of the ABC. Third, <code>test_extract_video_id</code> for the four URL shapes, and <code>test_normalize_serpapi</code> for the seconds-versus-ms heuristic.</p><p>What I would <em>not</em> do is mock <code>httpx</code> for the hosted providers. Those tests would assert my own assumptions about a third party's response shape, which is the definition of a test that passes while the product is broken. The real integration test is a request against the known-good video <code>HHUsHkYhkcM</code>, which <code>operations.md</code> already documents as the smoke test.</p>",
  f:["How would you test the error mapping?","Would you use FastAPI's TestClient?"],
- x:"Do not claim tests exist. The <code>operations.md:153</code> admission is written down; being caught overstating it would cost you every other claim you make."},
+ x:"Do not overstate or understate coverage. The limiter suite is real and worth claiming; the chain has none, and <code>operations.md:168</code> is written down. Being caught overstating coverage would cost you every other claim you make."},
 
 {n:9,t:"Provider chain",d:"Medium",q:"Explain how the fallback chain works.",
  p:"The core of the project. If you can only explain one thing well, make it this one.",
@@ -2451,7 +2469,7 @@ QUESTIONS.push(
 
 {n:26,t:"Security & CORS",d:"Hard",q:"Is this API secure? What could an attacker do?",
  p:"Threat modelling under time pressure. They want honest risk assessment, not reassurance.",
- a:"<p>There is no authentication, so anything reachable on the internet is reachable. Concretely, the risks are:</p><p><b>Quota exhaustion.</b> This is the real one. There's no rate limiting, so one script can loop the endpoint and burn the monthly 100-request quota in an afternoon, making the app useless for everyone else. That's an availability problem, and it's the first thing I'd fix &mdash; a per-IP token bucket plus a <code>429</code> path in the frontend.</p><p><b>Cost amplification.</b> Each request can cost up to three upstream calls if the chain is fully active. Combined with the above, that's a direct financial exposure, which is why SerpApi is off by default and why the free tiers are what they are.</p><p><b>Abuse as a YouTube fetch proxy.</b> The endpoint takes a URL parameter, so someone could point it at non-YouTube hosts. It doesn't actually do that &mdash; the four regexes only match YouTube shapes &mdash; but a stricter allowlist on the extracted ID's first character set is cheap defence in depth.</p><p><b>SSRF and injection</b> are largely not applicable here, and it's worth saying so explicitly: there's no database, no shell, no template rendering, and no user-supplied filesystem paths. The one place user input flows into an outbound URL is the Supadata request, which reconstructs a canonical <code>watch?v=</code> URL from the extracted 11-character ID rather than passing the raw parameter through.</p><p>What I would not do is pretend CORS mitigates any of this. It's a browser mechanism; the CLI proves the API is open to non-browser clients.</p>",
+ a:"<p>There is no authentication, so anything reachable on the internet is reachable. Concretely, the risks are:</p><p><b>Quota exhaustion.</b> This is the real one. There <em>was</em> no rate limiting: one script could loop the endpoint and burn the monthly 100-request quota in an afternoon, making the app useless for everyone else. That's since fixed &mdash; a per-IP token bucket, a <code>429 rate_limited</code> path with <code>Retry-After</code>, and tests &mdash; but the quota itself is still the ceiling, so the fix beyond it is a paid tier or self-hosting.</p><p><b>Cost amplification.</b> Each request can cost up to three upstream calls if the chain is fully active. Combined with the above, that's a direct financial exposure, which is why SerpApi is off by default and why the free tiers are what they are.</p><p><b>Abuse as a YouTube fetch proxy.</b> The endpoint takes a URL parameter, so someone could point it at non-YouTube hosts. It doesn't actually do that &mdash; the four regexes only match YouTube shapes &mdash; but a stricter allowlist on the extracted ID's first character set is cheap defence in depth.</p><p><b>SSRF and injection</b> are largely not applicable here, and it's worth saying so explicitly: there's no database, no shell, no template rendering, and no user-supplied filesystem paths. The one place user input flows into an outbound URL is the Supadata request, which reconstructs a canonical <code>watch?v=</code> URL from the extracted 11-character ID rather than passing the raw parameter through.</p><p>What I would not do is pretend CORS mitigates any of this. It's a browser mechanism; the CLI proves the API is open to non-browser clients.</p>",
  f:["How would you add auth?","What about the upstream providers' terms of service?","Rate limit by what key?"],
  x:"Do not lead with &quot;yes, CORS is configured correctly.&quot; The honest answer starts with &quot;there is no auth&quot; and goes straight to the quota-exhaustion risk."}
 );
@@ -2470,7 +2488,7 @@ QUESTIONS.push(
 
 {n:29,t:"Scaling & design",d:"Hard",q:"If you had a thousand users tomorrow, what breaks first?",
  p:"Prioritisation under hypothetical load. They want order and honesty, not a list of technologies.",
- a:"<p>In this order, and the first one isn't a technical problem.</p><p><b>The provider quota.</b> A thousand users against 100 requests a month is off by four orders of magnitude, and it isn't fixable with engineering &mdash; you either pay for a higher tier or self-host. Before that, though, the cache absorbs most repeat traffic, so the honest first step is measuring cache hit rate, which I currently don't do.</p><p><b>Rate limiting</b> has since shipped (per-IP token bucket, misses only), so the next cheapest protection is already in place — but the quota itself is still the ceiling, which is why it leads this list.</p><p><b>Render's free tier sleeps and cold-starts.</b> A free instance idles down, so the first request after a quiet period pays a cold start &mdash; on the order of tens of seconds, which is a terrible first impression and would blow any sane timeout. Moving to a paid instance or adding a health-check pinger is a config change.</p><p><b>Connection concurrency.</b> The handlers are <code>def</code>, so FastAPI runs them in a thread pool, and each can hold a worker for up to 25 seconds on the Supadata timeout. Converting the providers to <code>httpx.AsyncClient</code> with <code>async def</code> handlers is the fix, and it's contained.</p><p><b>The cache, at scale-out.</b> Process-local means N instances means N caches and N times the upstream calls for the same popular video. Redis at that point, or a single-flight lock per instance at least.</p><p>What does <em>not</em> break: there's no database, so no connection pool saturation; no user data, so no privacy or compliance surface; and the response is a few hundred kilobytes at most, so serving it is not the problem.</p>",
+ a:"<p>In this order, and the first one isn't a technical problem.</p><p><b>The provider quota.</b> A thousand users against 100 requests a month is off by four orders of magnitude, and it isn't fixable with engineering &mdash; you either pay for a higher tier or self-host. Before that, though, the cache absorbs most repeat traffic, so the honest first step is measuring cache hit rate, which I currently don't do.</p><p><b>Rate limiting</b> has since shipped (per-IP token bucket, misses only), so the next cheapest protection is already in place — but the quota itself is still the ceiling, which is why it leads this list.</p><p><b>Render's free tier sleeps and cold-starts.</b> A free instance idles down, so the first request after a quiet period pays a cold start &mdash; on the order of tens of seconds, which is a terrible first impression and would blow any sane timeout. Since then the frontend softens it: a <code>/health</code> ping on page load starts the boot while you're still pasting a URL, a visible tab keeps the instance warm below the sleep timer, and a status pill plus retry button make a slow wake visible instead of mysterious. A paid instance is the real fix; a cron pinger would hide the problem rather than solve it.</p><p><b>Connection concurrency.</b> The handlers are <code>def</code>, so FastAPI runs them in a thread pool, and each can hold a worker for up to 25 seconds on the Supadata timeout. Converting the providers to <code>httpx.AsyncClient</code> with <code>async def</code> handlers is the fix, and it's contained.</p><p><b>The cache, at scale-out.</b> Process-local means N instances means N caches and N times the upstream calls for the same popular video. Redis at that point, or a single-flight lock per instance at least.</p><p>What does <em>not</em> break: there's no database, so no connection pool saturation; no user data, so no privacy or compliance surface; and the response is a few hundred kilobytes at most, so serving it is not the problem.</p>",
  f:["What would you measure first?","How would you know you're rate limiting too hard?"],
  x:"Do not jump to &quot;I'd add Redis and a load balancer.&quot; Identify the third-party quota as the ceiling and protect it with rate limiting before adding any infrastructure."},
 
