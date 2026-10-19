@@ -1,6 +1,6 @@
 # ShrutiLipi
 
-Paste a YouTube URL → get a copyable transcript. v1 = captions-only.
+Paste a YouTube URL → get a transcript you can copy or download as `.txt` / `.srt` / `.vtt`. v1 = captions-only.
 
 Monorepo: **pnpm workspaces + Turborepo.** `apps/web` (Next.js, Vercel) + `apps/api`
 (FastAPI, Render) + `packages/shared` (the API contract every client depends on).
@@ -15,32 +15,19 @@ packages/
 tools/      stdlib-only CLI (fetch.py)
 ```
 
-## Local dev (2 terminals)
-
-Install once from the repo root:
+## Local dev
 
 ```bash
-pnpm install
+pnpm install                                # workspace JS deps (once)
+pip install -r apps/api/requirements.txt    # backend deps (once)
+pnpm dev                                    # web + api in parallel
 ```
 
-Terminal 1 — backend (from `apps/api`):
+Open the URL Next prints — `http://localhost:3000`, or the next free port if
+3000 is taken (every localhost port is CORS-safe). API probe:
+`curl http://localhost:8000/api/wake`. No env vars needed locally.
 
-```powershell
-pip install -r requirements.txt
-$env:FRONTEND_URL="http://localhost:3000"
-pnpm dev
-# health: http://localhost:8000/health
-```
-
-Terminal 2 — frontend (from `apps/web`):
-
-```powershell
-copy .env.example .env.local
-pnpm dev
-# app: http://localhost:3000
-```
-
-Or run both from the repo root with `pnpm dev` (Turborepo runs them in parallel).
+**Full walkthrough + troubleshooting: [`docs/getting-started.md`](docs/getting-started.md).**
 
 Test the API directly:
 
@@ -55,7 +42,7 @@ curl "http://localhost:8000/api/transcript?url=https://www.youtube.com/watch?v=d
 | `pnpm dev` | Both apps in parallel via Turbo |
 | `pnpm build` | Builds the shared package, then the web app |
 | `pnpm typecheck` | `tsc --noEmit` across the TS packages |
-| `pnpm test` | Test pipeline (nothing wired up yet) |
+| `pnpm test` | pytest (22) + `node --test` formatter tests (11), via Turbo |
 | `pnpm clean` | Drop build output and `node_modules` |
 
 ## Deploy

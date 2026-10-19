@@ -56,7 +56,7 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 | `SERPAPI_API_KEY` | — | secret, optional backup | |
 | `SERPAPI_ENABLED` | **`false`** | `true` only if key set | **Gotcha:** key alone does nothing without this flag |
 | `SERPAPI_TIME_UNIT` | `auto` | leave unset | `auto` = ms iff `max(start)>50000` **or** `max(duration)>100`; override `seconds`/`ms` if wrong |
-| `FRONTEND_URL` | — | Vercel URL (plain, not secret) | CORS allow-origin. **Must** match Vercel domain exactly or requests fail. |
+| `FRONTEND_URL` | — | Vercel URL (plain, not secret) | CORS allow-origin. **Must** match Vercel domain exactly or requests fail. Localhost ports are covered by the CORS regex, not this var. |
 | `WEBSHARE_PROXY_USERNAME/PASSWORD/HOSTS` | — | **leave empty** | Free proxies are dead (`Connection refused` + YouTube blocks datacenter IPs). Kept as legacy only. |
 | `WEBSHARE_PROXY_LIST` | — | — | Alternative: comma-separated full proxy URLs |
 | `RATE_LIMIT_ENABLED` | `true` | leave unset | Kill switch: `0`/`false`/`no`/`off` disables the limiter |
@@ -186,11 +186,12 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 - **Keyless local env = direct captions only** (correct default; your home IP isn't blocked).
 - To test chain behavior locally, export any subset of the §3 vars before starting uvicorn.
 - Unit-checks used during development (chain parse, eligibility, terminal, time-unit auto, proxy skip) — re-add as a test file if this grows.
-- Test suite has started: `apps/api/tests/test_ratelimit.py` (16 tests, limiter + 429 wiring), run via `pnpm test` from the root or `pytest` from `apps/api/`. `pytest` is pinned in `requirements.txt`.
+- Test suites: `apps/api/tests/` (18 pytest — limiter + 429 wiring, wake-probe contract) via `pnpm test` or `pytest` from `apps/api/`, and `packages/shared/src/subtitles.test.ts` (11 `node --test` cases for the SRT/VTT formatters — Node ≥22.6 runs the TS natively, no test framework). `pnpm test` runs both through Turbo; `pytest` is pinned in `requirements.txt`.
 
 ### Frontend note
 - `apiBase()` in `apps/web/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.
 - `friendlyError()` and the response types now live in `@shrutilipi/shared` — add new `detail` codes to its switch, and extend the `TranscriptErrorDetail` union at the same time.
+- Exports: `TranscriptView` has Copy, a segmented `Download [.txt | .srt | .vtt]` group and Share. `toSrt()`/`toVtt()` are pure functions in `packages/shared/src/subtitles.ts` (re-exported from the package index); the Python twins are `render_srt()`/`render_vtt()` in `tools/fetch.py`. `.txt` honors the Timestamps checkbox; the subtitle formats always carry timestamps, so they ignore it.
 - Cold-start wake probe: `pingHealth()` in the same file; `useServerWake` + `ServerStatus` drive the pill (§4). No backend change needed — `/api/wake` is already outside the limiter.
 
 ---
@@ -211,7 +212,7 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 - **Full usage guide with examples: [`tools/README.md`](../tools/README.md)** (dummy IDs only).
 - Stdlib only, no installs (`rich` optional — pretty progress/table when installed; `--plain` disables). Windows launcher: `tools/shrutilipi.bat`. Talks to any backend (`--api`, default `http://localhost:8000`).
 - Transcript goes to **stdout**, stats/progress to **stderr** (pipes cleanly: `python tools/fetch.py … | pbcopy`).
-- `--out <file>` writes a file; `--out -` or `--batch` writes `<videoId>.txt` per video.
+- `--out <file>` writes a file; `--out -` or `--batch` writes `<videoId>.<fmt>` per video (default `txt`). `--srt`/`--vtt` switch the format — mutually exclusive, and incompatible with `--timestamps`.
 - `--timestamps` → `[m:ss] text` lines; `--lang <code>`; `--batch <file>` = one URL/line, `#` comments.
 - Exit codes for scripting: **0** ok, **1** no captions/bad URL, **2** network/server error or rate-limited (`429` — transient, respect `Retry-After`).
 - Verified locally: single/timestamps/out/batch/bad-id/dead-api all behave as specified.

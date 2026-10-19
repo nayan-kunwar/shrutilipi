@@ -314,9 +314,10 @@ summary:hover{background:var(--bg-soft)}
 <header class="hero">
   <div class="eyebrow">Project explainer &amp; interview preparation</div>
   <h1>Shruti<span class="b">Lipi</span></h1>
-  <p class="pitch">Paste a YouTube URL &rarr; get a copyable, downloadable transcript. v1 is captions-only. A
+  <p class="pitch">Paste a YouTube URL &rarr; get a transcript you can copy or download as <code>.txt</code>,
+  <code>.srt</code> or <code>.vtt</code>. v1 is captions-only. A
   <b>pnpm-workspaces + Turborepo monorepo</b>: a Next.js 14 app on Vercel and a FastAPI API on Render, sharing one
-  TypeScript contract package, plus a stdlib-only Python CLI &mdash; roughly <b>2,190 lines</b> of hand-written code
+  TypeScript contract package, plus a stdlib-only Python CLI &mdash; roughly <b>2,440 lines</b> of hand-written code
   across 33 files, with <b>4 pinned Python dependencies</b>, <b>3 JS runtime dependencies</b>, and Turbo orchestrating
   both halves from the root.</p>
 
@@ -463,22 +464,23 @@ summary:hover{background:var(--bg-soft)}
     <table class="compact">
       <thead><tr><th>File</th><th class="nw">Lines</th><th>Responsibility</th></tr></thead>
       <tbody>
-        <tr class="grp"><td colspan="3">Backend &mdash; 997 Python lines + workspace shim</td></tr>
-        <tr><td class="nw"><code>apps/api/main.py</code></td><td class="nw">140</td><td>App, CORS, two routes, TTL cache, rate-limit gate, <code>_map_error</code></td></tr>
+        <tr class="grp"><td colspan="3">Backend &mdash; 1029 Python lines + workspace shim</td></tr>
+        <tr><td class="nw"><code>apps/api/main.py</code></td><td class="nw">149</td><td>App, CORS, transcript + wake routes, TTL cache, rate-limit gate, <code>_map_error</code></td></tr>
         <tr><td class="nw"><code>apps/api/services/ratelimit.py</code></td><td class="nw">132</td><td>Per-IP token bucket (stdlib only), XFF client key, env factory, kill switch</td></tr>
         <tr><td class="nw"><code>apps/api/services/providers.py</code></td><td class="nw">369</td><td><b>The centrepiece.</b> ABC, three providers, chain, error taxonomy, factory</td></tr>
         <tr><td class="nw"><code>apps/api/services/youtube.py</code></td><td class="nw">157</td><td>Video-ID regex ladder, oEmbed title, caption fetch, proxy config</td></tr>
         <tr><td class="nw"><code>apps/api/tests/test_ratelimit.py</code></td><td class="nw">199</td><td>16 pytest cases: bucket maths, key extraction, env parsing, TestClient 429 shape</td></tr>
+        <tr><td class="nw"><code>apps/api/tests/test_wake.py</code></td><td class="nw">23</td><td>Wake-probe contract: <code>/api/wake</code> 200 shape + <code>/health</code> alias</td></tr>
         <tr><td class="nw"><code>apps/api/Dockerfile</code></td><td class="nw">12</td><td><code>python:3.11-slim</code>, uvicorn on <code>${PORT:-8000}</code></td></tr>
         <tr><td class="nw"><code>apps/api/requirements.txt</code></td><td class="nw">5</td><td>fastapi, uvicorn[standard], youtube-transcript-api, httpx, pytest &mdash; all pinned</td></tr>
         <tr><td class="nw"><code>apps/api/package.json</code></td><td class="nw">13</td><td>Thin Turbo shim &mdash; <code>dev</code>/<code>test</code> delegate to uvicorn / pytest; <code>build</code> is a <code>py_compile</code> syntax check</td></tr>
-        <tr class="grp"><td colspan="3">Frontend &mdash; 815 TS/TSX + 19 CSS + 56 config</td></tr>
+        <tr class="grp"><td colspan="3">Frontend &mdash; 850 TS/TSX + 19 CSS + 56 config</td></tr>
         <tr><td class="nw"><code>apps/web/app/page.tsx</code></td><td class="nw">159</td><td>Client state machine, bootstrap from query string, theme toggle, cold-start wake wiring</td></tr>
         <tr><td class="nw"><code>apps/web/components/ShareButtons.tsx</code></td><td class="nw">160</td><td>Five share targets plus copy link, no client SDKs</td></tr>
-        <tr><td class="nw"><code>apps/web/components/TranscriptView.tsx</code></td><td class="nw">90</td><td>Render, timestamps toggle, copy, download <code>.txt</code> (<code>formatTime</code> moved to shared)</td></tr>
-        <tr><td class="nw"><code>apps/web/components/ServerStatus.tsx</code></td><td class="nw">124</td><td>Waking / awake / unreachable pill with retry &mdash; silent when the API is already warm</td></tr>
+        <tr><td class="nw"><code>apps/web/components/TranscriptView.tsx</code></td><td class="nw">119</td><td>Render, timestamps toggle, copy, segmented download <code>.txt</code>/<code>.srt</code>/<code>.vtt</code>, share</td></tr>
+        <tr><td class="nw"><code>apps/web/components/ServerStatus.tsx</code></td><td class="nw">126</td><td>Waking / awake / unreachable pill with retry &mdash; silent when the API is already warm</td></tr>
         <tr><td class="nw"><code>apps/web/lib/useServerWake.ts</code></td><td class="nw">101</td><td>Wake hook: ping on load, on tab return / first interaction, keep-warm while visible</td></tr>
-        <tr><td class="nw"><code>apps/web/lib/api.ts</code></td><td class="nw">45</td><td><code>apiBase</code> + <code>pingHealth</code> (wake probe) + <code>fetchTranscript</code> &mdash; types and <code>friendlyError</code> live in shared</td></tr>
+        <tr><td class="nw"><code>apps/web/lib/api.ts</code></td><td class="nw">49</td><td><code>apiBase</code> + <code>pingHealth</code> (wake probe) + <code>fetchTranscript</code> &mdash; types and <code>friendlyError</code> live in shared</td></tr>
         <tr><td class="nw"><code>apps/web/app/layout.tsx</code></td><td class="nw">61</td><td>SEO metadata, anti-FOUC theme script (<code>SITE_URL</code> imported from shared)</td></tr>
         <tr><td class="nw"><code>apps/web/components/UrlInput.tsx</code></td><td class="nw">53</td><td>Input, language <code>&lt;select&gt;</code>, submit</td></tr>
         <tr><td class="nw"><code>apps/web/app/globals.css</code></td><td class="nw">19</td><td>Tailwind directives, <code>color-scheme</code>, <code>::selection</code></td></tr>
@@ -487,19 +489,22 @@ summary:hover{background:var(--bg-soft)}
         <tr><td class="nw"><code>apps/web/package.json</code></td><td class="nw">28</td><td>Now <code>@shrutilipi/web</code>; depends on shared via <code>workspace:*</code>; has a <code>typecheck</code> script</td></tr>
         <tr><td class="nw"><code>apps/web/tsconfig.json</code></td><td class="nw">11</td><td>Extends the shared base; keeps <code>jsx: preserve</code> + Next plugin</td></tr>
         <tr><td class="nw"><code>apps/web/next.config.js</code></td><td class="nw">17</td><td><code>transpilePackages</code> + <code>outputFileTracingRoot</code> &mdash; both required for the monorepo build</td></tr>
-        <tr class="grp"><td colspan="3">Shared packages + workspace root &mdash; 184 lines</td></tr>
-        <tr><td class="nw"><code>packages/shared/src/index.ts</code></td><td class="nw">83</td><td><b>The contract.</b> Response types, <code>TranscriptErrorDetail</code> (incl. <code>rate_limited</code>), <code>friendlyError</code>, <code>formatTime</code>, <code>SITE_URL</code></td></tr>
-        <tr><td class="nw"><code>packages/shared/package.json</code></td><td class="nw">20</td><td><code>@shrutilipi/shared</code>; ships raw TS, no build step</td></tr>
-        <tr><td class="nw"><code>packages/shared/tsconfig.json</code></td><td class="nw">5</td><td>Extends the shared base</td></tr>
+        <tr class="grp"><td colspan="3">Shared packages + workspace root &mdash; 322 lines</td></tr>
+        <tr><td class="nw"><code>packages/shared/src/index.ts</code></td><td class="nw">85</td><td><b>The contract.</b> Response types, <code>TranscriptErrorDetail</code> (incl. <code>rate_limited</code>), <code>friendlyError</code>, <code>formatTime</code>, <code>SITE_URL</code>; re-exports <code>toSrt</code>/<code>toVtt</code></td></tr>
+        <tr><td class="nw"><code>packages/shared/src/subtitles.ts</code></td><td class="nw">46</td><td>SRT/VTT formatters (pure); two-language pair with <code>tools/fetch.py</code></td></tr>
+        <tr><td class="nw"><code>packages/shared/src/subtitles.test.ts</code></td><td class="nw">82</td><td>11 <code>node:test</code> cases pinning the edge-case contract (Node &ge;22.6 strips TS natively)</td></tr>
+        <tr><td class="nw"><code>packages/shared/package.json</code></td><td class="nw">22</td><td><code>@shrutilipi/shared</code>; ships raw TS, no build step; <code>node --test</code> script</td></tr>
+        <tr><td class="nw"><code>packages/shared/tsconfig.json</code></td><td class="nw">11</td><td>Extends the shared base; <code>allowImportingTsExtensions</code> for the test's <code>.ts</code> import</td></tr>
         <tr><td class="nw"><code>packages/tsconfig/base.json</code></td><td class="nw">16</td><td><code>@shrutilipi/tsconfig</code> &mdash; strict, bundler resolution, shared by web + shared</td></tr>
         <tr><td class="nw"><code>packages/tsconfig/package.json</code></td><td class="nw">6</td><td>Publishes <code>base.json</code> inside the workspace</td></tr>
         <tr><td class="nw"><code>package.json</code></td><td class="nw">21</td><td>Private root; pins <code>packageManager: pnpm</code>; scripts delegate to Turbo</td></tr>
         <tr><td class="nw"><code>pnpm-workspace.yaml</code></td><td class="nw">3</td><td>Members: <code>apps/*</code>, <code>packages/*</code></td></tr>
         <tr><td class="nw"><code>turbo.json</code></td><td class="nw">30</td><td>Pipelines: <code>build</code> (^build + <code>.next</code> outputs), persistent <code>dev</code>, <code>typecheck</code>, <code>test</code></td></tr>
-        <tr class="grp"><td colspan="3">CLI, config &amp; docs &mdash; 717 lines</td></tr>
-        <tr><td class="nw"><code>tools/fetch.py</code></td><td class="nw">184</td><td>argparse CLI, single + batch, rich-optional output, exit codes</td></tr>
-        <tr><td class="nw"><code>tools/README.md</code></td><td class="nw">164</td><td>Full CLI usage guide with dummy IDs only</td></tr>
-        <tr><td class="nw"><code>docs/operations.md</code></td><td class="nw">197</td><td><b>Best doc in the repo.</b> Env tables, chain semantics, deploy runbook, known issues with root causes</td></tr>
+        <tr class="grp"><td colspan="3">CLI, config &amp; docs &mdash; 911 lines</td></tr>
+        <tr><td class="nw"><code>tools/fetch.py</code></td><td class="nw">240</td><td>argparse CLI, single + batch, txt/srt/vtt formats, rich-optional output, exit codes</td></tr>
+        <tr><td class="nw"><code>tools/README.md</code></td><td class="nw">171</td><td>Full CLI usage guide with dummy IDs only</td></tr>
+        <tr><td class="nw"><code>docs/operations.md</code></td><td class="nw">219</td><td><b>Best doc in the repo.</b> Env tables, chain semantics, deploy runbook, known issues with root causes</td></tr>
+        <tr><td class="nw"><code>docs/getting-started.md</code></td><td class="nw">93</td><td>Run-it-yourself guide: prerequisites, ports, and the real troubleshooting table</td></tr>
         <tr><td class="nw"><code>tools/BATCH.md</code></td><td class="nw">89</td><td>Batch-mode deep dive</td></tr>
         <tr><td class="nw"><code>README.md</code></td><td class="nw">73</td><td>Quickstart via <code>pnpm</code> + Turbo, deploy, v2 note</td></tr>
         <tr><td class="nw"><code>render.yaml</code></td><td class="nw">23</td><td>Render Blueprint: <code>rootDir: apps/api</code>, plan, eight env vars</td></tr>
@@ -566,7 +571,7 @@ USER
 [7] page.tsx:31  setData(result), then history.replaceState(?url=&lt;canonical id&gt;&amp;lang=&lt;lang&gt;)
  v
 [8] TranscriptView  plain text, or [m:ss] rows when timestamps are on
- |  Copy (clipboard -> textarea fallback) . Download .txt (Blob) . Share (5 targets)
+ |  Copy (clipboard -> textarea fallback) . Download .txt/.srt/.vtt (Blob) . Share (5 targets)
  v
 CLI takes the same path from [3] onward, then: text -> stdout, stats -> stderr, exit 0/1/2</pre></div>
 
@@ -1124,6 +1129,7 @@ for part in _frontend_url.split(","):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(_allowed),     # a set, sorted for deterministic output
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1):\d+$",  # any local port
     allow_credentials=False,             # no cookies -> credentials not needed
     allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
@@ -1132,6 +1138,10 @@ app.add_middleware(
     <li><b>Allowlist, not wildcard.</b> <code>allow_origins=["*"]</code> would be simpler and is fine for a public
     read-only API, but an explicit list means a compromised or misconfigured frontend var can't open the API to
     everything.</li>
+    <li><b>Localhost by regex.</b> <code>allow_origin_regex</code> matches any <code>localhost</code> or
+    <code>127.0.0.1</code> port, because <code>next dev</code> drifts ports when 3000 is taken &mdash; a fixed
+    3000-only list broke local dev the day a second project claimed the port (server logs 200, browser says
+    <em>CORS error</em>). Production origins stay explicit; the regex can never match a real deployment.</li>
     <li><b>Read-only surface.</b> <code>["GET", "OPTIONS"]</code> &mdash; there is no mutating endpoint, so the CORS
     policy can be maximally tight. Good interview observation: CORS is a <em>browser</em> mechanism, not access control. It
     stops other <em>web pages</em> from reading your responses inside a user's browser; it does nothing against
@@ -1248,7 +1258,10 @@ const bootstrapped = useRef(false);        // &lt;- a REF, not state. See below.
         hydrates, with <code>suppressHydrationWarning</code> on <code>&lt;html&gt;</code> because the server always renders
         the light-less markup. Without it, dark-mode users get a white flash on every load.</li>
         <li><b>Download without a library.</b> <code>Blob</code> + <code>URL.createObjectURL</code> +
-        <code>revokeObjectURL</code>, filename <code>${videoId}.txt</code> (<code>TranscriptView.tsx:32</code>).</li>
+        <code>revokeObjectURL</code>, one button group for <code>.txt</code>/<code>.srt</code>/<code>.vtt</code> with
+        filename <code>${videoId}.&lt;fmt&gt;</code> (<code>TranscriptView.tsx</code>). The subtitle files come from pure
+        <code>toSrt</code>/<code>toVtt</code> functions in <code>packages/shared/src/subtitles.ts</code> &mdash; no
+        library, and the same edge-case rules are mirrored in the Python CLI's twins.</li>
         <li><b>Share without SDKs.</b> <code>ShareButtons.tsx</code> hand-builds <code>wa.me/?text=</code>,
         <code>t.me/share/url</code>, the X intent, the Facebook sharer and <code>mailto:</code> from a single
         <code>${origin}/?url=&lt;id&gt;&amp;lang=&lt;lang&gt;</code> string. Every external link gets
@@ -1289,6 +1302,7 @@ const bootstrapped = useRef(false);        // &lt;- a REF, not state. See below.
   <div class="codewrap"><button class="copy" type="button">copy</button><pre>python tools/fetch.py HHUsHkYhkcM
 python tools/fetch.py https://youtu.be/HHUsHkYhkcM --lang hi --timestamps
 python tools/fetch.py HHUsHkYhkcM --out transcript.txt
+python tools/fetch.py HHUsHkYhkcM --srt --out subs.srt   # SubRip cues (or --vtt)
 python tools/fetch.py HHUsHkYhkcM --out -            # writes HHUsHkYhkcM.txt
 python tools/fetch.py --batch urls.txt --plain       # one URL per line, # comments
 python tools/fetch.py X --api https://shrutilipi-backend.onrender.com
@@ -1302,6 +1316,7 @@ python tools/fetch.py HHUsHkYhkcM | pbcopy            # transcript only, no stat
         <tr><td><code>url</code> <span class="pill">positional, optional</span></td><td>YouTube URL in any of four shapes, or a raw 11-char ID</td></tr>
         <tr><td><code>--lang</code></td><td>Caption language, default <code>en</code></td></tr>
         <tr><td><code>--api</code></td><td>Backend base URL, default <code>http://localhost:8000</code></td></tr>
+        <tr><td><code>--srt</code> / <code>--vtt</code></td><td>Export SubRip or WebVTT cues instead of text (mutually exclusive; <code>--timestamps</code> no longer applies)</td></tr>
         <tr><td><code>--out</code></td><td>Write to a file instead of stdout; <code>-</code> means <code>&lt;videoId&gt;.txt</code></td></tr>
         <tr><td><code>--timestamps</code></td><td>Prefix each line with <code>[m:ss]</code></td></tr>
         <tr><td><code>--batch &lt;file&gt;</code></td><td>One URL per line; <code>#</code> comments and blank lines are skipped</td></tr>
@@ -2463,7 +2478,7 @@ QUESTIONS.push(
 
 {n:25,t:"Security & CORS",d:"Medium",q:"Explain your CORS configuration.",
  p:"A very common question and a common place for hand-waving. The good answer distinguishes CORS from access control.",
- a:"<p>The policy is an explicit allowlist built into a set: <code>FRONTEND_URL</code>, plus <code>localhost:3000</code> and <code>127.0.0.1:3000</code> for local dev, plus any extra origins from a comma-separated <code>FRONTEND_URL</code> for preview deployments. Then <code>allow_methods=[\"GET\", \"OPTIONS\"]</code>, <code>allow_headers=[\"*\"]</code>, and <code>allow_credentials=False</code>.</p><p>Three reasoning points. First, an allowlist rather than a wildcard: <code>allow_origins=[\"*\"]</code> would be perfectly fine for a public read-only API, and I'd probably use it, but an explicit list means a misconfigured or compromised frontend variable can't open the API to everything.</p><p>Second, and this is the bit that matters in an interview: <b>CORS is a browser mechanism, not access control.</b> It stops other <em>web pages</em> from reading my responses inside a user's browser. It does nothing against <code>curl</code> or my own CLI &mdash; which is exactly why the CLI works fine and why &ldquo;CORS is my security&rdquo; is a misunderstanding. There is no authentication in v1, so the API is genuinely public; CORS is purely about not letting arbitrary third-party sites embed it in their pages.</p><p>Third, <code>allow_credentials=False</code> is correct because there's no auth at all, and it also means <code>Access-Control-Allow-Origin: *</code> would be legal here &mdash; which is the exact check you have to make the day you do add cookies or tokens.</p><p>The operational trap: <code>FRONTEND_URL</code> has to match the Vercel domain <em>exactly</em>, scheme included. A mismatch produces a browser CORS error with nothing in the server logs, which cost me a deploy to learn.</p>",
+ a:"<p>The policy is an explicit allowlist: <code>FRONTEND_URL</code> (comma-separated for preview deployments) plus hard-coded production fallbacks, and a localhost-port regex (<code>^http://(localhost|127\.0\.0\.1):\d+$</code>) so local dev works on whatever port <code>next dev</code> lands on &mdash; a fixed port list broke the day a second project claimed 3000. Then <code>allow_methods=[\"GET\", \"OPTIONS\"]</code>, <code>allow_headers=[\"*\"]</code>, and <code>allow_credentials=False</code>.</p><p>Three reasoning points. First, an allowlist rather than a wildcard: <code>allow_origins=[\"*\"]</code> would be perfectly fine for a public read-only API, and I'd probably use it, but an explicit list means a misconfigured or compromised frontend variable can't open the API to everything.</p><p>Second, and this is the bit that matters in an interview: <b>CORS is a browser mechanism, not access control.</b> It stops other <em>web pages</em> from reading my responses inside a user's browser. It does nothing against <code>curl</code> or my own CLI &mdash; which is exactly why the CLI works fine and why &ldquo;CORS is my security&rdquo; is a misunderstanding. There is no authentication in v1, so the API is genuinely public; CORS is purely about not letting arbitrary third-party sites embed it in their pages.</p><p>Third, <code>allow_credentials=False</code> is correct because there's no auth at all, and it also means <code>Access-Control-Allow-Origin: *</code> would be legal here &mdash; which is the exact check you have to make the day you do add cookies or tokens.</p><p>The operational trap: <code>FRONTEND_URL</code> has to match the Vercel domain <em>exactly</em>, scheme included. A mismatch produces a browser CORS error with nothing in the server logs, which cost me a deploy to learn.</p>",
  f:["What happens when you add auth?","Why include localhost?","What about preflight?"],
  x:"Do not present CORS as a security feature. The strongest sentence is that it's a browser read-protection mechanism and does nothing against non-browser clients."},
 

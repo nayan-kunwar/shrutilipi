@@ -1,0 +1,93 @@
+# Getting started
+
+Run ShrutiLipi locally from a fresh clone. The five "it looks broken" cases at
+the bottom are all real ones — check there before debugging anything.
+
+## Prerequisites
+
+- **Node.js ≥ 20** — 22.6+ recommended: `node --test` then runs the TypeScript
+  tests natively, no framework needed
+- **pnpm** — the repo pins the version (`packageManager` in the root
+  `package.json`); enable it with `corepack enable`
+- **Python 3.11+** — for the FastAPI backend and the CLI
+- A YouTube URL to test with. Known-good: **`HHUsHkYhkcM`** (English captions,
+  ~969 segments — documented in `docs/operations.md` §7)
+
+## 1. Install (once)
+
+```bash
+git clone <repo-url> && cd shrutilipi
+pnpm install                                # workspace JS deps
+pip install -r apps/api/requirements.txt    # fastapi, uvicorn, ... (venv optional)
+```
+
+`pnpm dev` runs `python -m uvicorn` with whatever interpreter is active —
+`pip install` goes wherever `python` points.
+
+## 2. Start
+
+```bash
+pnpm dev
+```
+
+Turborepo starts both halves in parallel:
+
+| | URL | Notes |
+|---|---|---|
+| Web | http://localhost:3000 | If 3000 is taken, Next takes the next free port (3001, 3002, …) and **prints the one it chose** |
+| API | http://localhost:8000 | Probe: `curl http://localhost:8000/api/wake` → `{"ok":true}`; interactive docs at `/docs` |
+
+No env vars are needed locally. Keyless mode fetches YouTube captions directly
+(Supadata's key is only for the deployed fallback chain), and rate limiting is
+on by default (20 requests / 10 min / IP — misses only).
+
+## 3. Use it
+
+Open the web URL, paste any YouTube link or video ID, **Get transcript** →
+copy it, download `.txt` / `.srt` / `.vtt`, or share. Timestamps toggle adds
+`[m:ss]` prefixes to the text copy/download.
+
+## Variants
+
+```bash
+# Frontend against the deployed Render API instead of a local one
+NEXT_PUBLIC_API_URL=https://shrutilipi-backend.onrender.com pnpm dev
+# (first call sleeps ~30-50 s: the UI shows a wake-up card, then retries)
+
+# Separate terminals, if you prefer
+cd apps/web && pnpm dev     # frontend only
+cd apps/api && pnpm dev     # backend only (uvicorn --reload)
+
+# CLI — same API, no browser (defaults to http://localhost:8000; --api to point elsewhere)
+python tools/fetch.py HHUsHkYhkcM --srt --out subs.srt
+```
+
+## Checks
+
+| Command | What runs |
+|---|---|
+| `pnpm test` | 22 pytest (limiter, wake probe, CORS) + 11 `node --test` formatter cases |
+| `pnpm typecheck` | `tsc --noEmit` across web + shared |
+| `pnpm build` | production Next build (stop `next dev` first — they share `.next`) |
+
+## Troubleshooting — the ways it actually breaks
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Page on 3001/3002 shows "Failed to fetch" + "The API is asleep" while the API logs healthy 200s | CORS: the browser blocked the response (server logs prove it answered) | Should not happen anymore — any localhost port is allowed via `allow_origin_regex` in `apps/api/main.py`. Verify: `curl -s -D - -H "Origin: http://localhost:3001" http://localhost:8000/api/wake \| grep -i access-control` echoes the origin |
+| Loads once, then chunks 404 (`main-app.js`, `app-pages-internals.js`) | Corrupted `.next` — usually two `next dev` processes shared the folder | Stop every `next dev`, `rm -rf apps/web/.next`, restart |
+| "The API is asleep" card, locally | The API really is down or on another port — the probe fetch failed | `curl http://localhost:8000/api/wake` → must return 200. If not, restart `pnpm dev` |
+| Weird double-stack behavior, flaky ports | A second `pnpm dev` while the first still runs (Windows lets two processes bind one port) | `netstat -ano \| findstr ":8000"` → `taskkill /F /T /PID <pid>` on the extra one; keep a single stack |
+| uvicorn didn't reload your edit | You're editing files the reloader isn't watching, or the terminal died | The terminal running `pnpm dev` must stay alive; watch for `WatchFiles detected changes` |
+
+## Stop
+
+Ctrl+C in the terminal running `pnpm dev`. If a server ever outlives its
+terminal (orphaned dev process):
+
+```powershell
+netstat -ano | findstr ":3001 :8000"     # find the PIDs
+taskkill /F /T /PID <pid>
+```
+
+Ports free = project fully stopped. Start again with `pnpm dev`.
