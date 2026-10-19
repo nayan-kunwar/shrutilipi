@@ -55,10 +55,17 @@ python tools/fetch.py "https://youtu.be/abc123XYZ_-"
 |---|---|---|
 | `--lang <code>` | caption language (default `en`) | `python tools/fetch.py abc123XYZ_- --lang hi` |
 | `--timestamps` | prefix each line with `[m:ss]` | `python tools/fetch.py abc123XYZ_- --timestamps` |
-| `--out <file>` | write to a file (`-` → `<videoId>.txt`) | `python tools/fetch.py abc123XYZ_- --out transcript.txt` |
+| `--srt` | output SubRip cues instead of text | `python tools/fetch.py abc123XYZ_- --srt --out subs.srt` |
+| `--vtt` | output WebVTT cues instead of text | `python tools/fetch.py abc123XYZ_- --vtt --out subs.vtt` |
+| `--out <file>` | write to a file (`-` → `<videoId>.<fmt>`) | `python tools/fetch.py abc123XYZ_- --out transcript.txt` |
 | `--api <url>` | backend base URL (default `http://localhost:8000`) | `python tools/fetch.py abc123XYZ_- --api https://shrutilipi-backend.onrender.com` |
 | `--batch <file>` | fetch every URL in a file | `python tools/fetch.py --batch urls.txt` |
 | `--plain` | force plain output even if rich is installed | `python tools/fetch.py abc123XYZ_- --plain` |
+
+`--srt` and `--vtt` are mutually exclusive and can't be combined with `--timestamps`
+(subtitle formats carry timestamps by nature). The formatters are exact twins of the
+ones the website uses (`packages/shared/src/subtitles.ts`), so both tools produce
+byte-identical files.
 
 ## Windows launcher — `shrutilipi.bat`
 

@@ -81,3 +81,5 @@ export function formatTime(s: number): string {
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
+
+export { toSrt, toVtt } from "./subtitles";

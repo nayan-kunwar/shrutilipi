@@ -11,10 +11,12 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "node --test src/subtitles.test.ts",
     "clean": "rm -rf .turbo node_modules"
   },
   "devDependencies": {
     "@shrutilipi/tsconfig": "workspace:*",
+    "@types/node": "20.16.13",
     "typescript": "5.6.3"
   }
 }

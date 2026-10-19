@@ -1,5 +1,11 @@
 {
   "extends": "@shrutilipi/tsconfig/base.json",
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "compilerOptions": {
+    // Lets the test file import ./subtitles.ts with an explicit extension,
+    // which is what Node's type-stripping test runner needs (legal because
+    // noEmit is on in the base config).
+    "allowImportingTsExtensions": true
+  }
 }

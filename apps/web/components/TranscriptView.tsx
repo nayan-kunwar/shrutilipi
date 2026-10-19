@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatTime, type TranscriptResponse } from "@shrutilipi/shared";
+import { formatTime, toSrt, toVtt, type TranscriptResponse } from "@shrutilipi/shared";
 import ShareButtons from "./ShareButtons";
 
 export default function TranscriptView({ data }: { data: TranscriptResponse }) {
@@ -29,13 +29,27 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  function handleDownload() {
-    const blob = new Blob([textToCopy], { type: "text/plain;charset=utf-8" });
+  function downloadFile(name: string, content: string, mime: string) {
+    const blob = new Blob([content], { type: mime });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${data.videoId}.txt`;
+    a.download = name;
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  // .txt honors the Timestamps checkbox; the subtitle formats always carry
+  // timestamps by nature, so they ignore it.
+  function handleDownload(fmt: "txt" | "srt" | "vtt") {
+    const content =
+      fmt === "txt" ? textToCopy : fmt === "srt" ? toSrt(data.segments) : toVtt(data.segments);
+    const mime =
+      fmt === "txt"
+        ? "text/plain;charset=utf-8"
+        : fmt === "srt"
+          ? "application/x-subrip;charset=utf-8"
+          : "text/vtt;charset=utf-8";
+    downloadFile(`${data.videoId}.${fmt}`, content, mime);
   }
 
   return (
@@ -62,12 +76,27 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
         >
           {copied ? <span className="text-brand">Copied ✓</span> : "Copy"}
         </button>
-        <button
-          onClick={handleDownload}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium transition hover:border-brand hover:text-brand dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-brand dark:hover:text-brand"
+        <div
+          className="flex items-stretch overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700"
+          role="group"
+          aria-label="Download transcript"
         >
-          Download .txt
-        </button>
+          <span className="flex items-center px-2 text-xs text-zinc-500 dark:text-zinc-400">
+            Download
+          </span>
+          {(["txt", "srt", "vtt"] as const).map((fmt, i) => (
+            <button
+              key={fmt}
+              onClick={() => handleDownload(fmt)}
+              title={`Download ${data.videoId}.${fmt}`}
+              className={`px-2.5 py-1.5 text-xs font-medium transition hover:bg-zinc-100 hover:text-brand dark:hover:bg-zinc-800 ${
+                i > 0 ? "border-l border-zinc-300 dark:border-zinc-700" : ""
+              }`}
+            >
+              .{fmt}
+            </button>
+          ))}
+        </div>
         <ShareButtons videoId={data.videoId} lang={data.language} title={data.title || data.videoId} />
       </div>
 
