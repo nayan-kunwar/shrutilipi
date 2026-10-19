@@ -47,8 +47,17 @@ _CACHE: dict[str, tuple[float, dict]] = {}
 CACHE_TTL = 60 * 60 * 24
 
 
+@app.get("/api/wake")
 @app.get("/health")
-def health():
+def wake():
+    """Wake/keep-warm probe — no provider call, no rate-limit tokens.
+
+    The frontend pings /api/wake on load: its arrival starts a boot if the
+    free instance is asleep. /health stays as the ops alias (curl, dashboards).
+    The probe deliberately does not use the word "health" as the frontend
+    path — some adblock filter lists block health-style URLs client-side
+    (net::ERR_BLOCKED_BY_CLIENT), which would masquerade as a dead server.
+    """
     return {"ok": True}
 
 

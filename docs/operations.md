@@ -26,7 +26,7 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 - **Backend**: FastAPI, `apps/api/`, Docker (`python`, 3.11). Dependencies pinned: `youtube-transcript-api==1.2.4`, `httpx==0.28.1` — hosted providers use plain `httpx`, no new deps.
 - **Shared package**: `@shrutilipi/shared` ships raw TS (no build step). It holds `TranscriptResponse`/`TranscriptSegment`, the `TranscriptErrorDetail` union, `friendlyError()`, and `formatTime()`. Anything touching `process.env` or the network stays in `apps/web/lib/api.ts`. `next.config.js` needs `transpilePackages: ["@shrutilipi/shared"]` and `experimental.outputFileTracingRoot` set to the repo root, or the build resolves the workspace dep but misses it in the trace.
 - **API**:
-  - `GET /health` → `{"ok": true}`
+  - `GET /api/wake` → `{"ok": true}` (frontend wake probe; `GET /health` is the ops alias for the same handler)
   - `GET /api/transcript?url=<youtube-url-or-id>&lang=<code>` → `{videoId, title, language, plainText, segments[]}` (`segments[i] = {start, duration, text}` in seconds)
 - **Cache**: in-memory TTL dict, **24h** (`CACHE_TTL` in `apps/api/main.py`), key `videoId:lang`. Restart clears it.
 - **Title**: best-effort via YouTube oEmbed (no key); may be `null` → frontend falls back to showing `videoId`.
@@ -61,7 +61,7 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 | `WEBSHARE_PROXY_LIST` | — | — | Alternative: comma-separated full proxy URLs |
 | `RATE_LIMIT_ENABLED` | `true` | leave unset | Kill switch: `0`/`false`/`no`/`off` disables the limiter |
 | `RATE_LIMIT_REQUESTS` | `20` | leave unset | Bucket capacity per client per window |
-| `RATE_LIMIT_WINDOW_SECONDS` | `600` | leave unset | Refill window in seconds (20 per 10 min); misses only, `/health` unlimited |
+| `RATE_LIMIT_WINDOW_SECONDS` | `600` | leave unset | Refill window in seconds (20 per 10 min); misses only, `/api/wake` unlimited |
 
 ### Chain semantics
 
@@ -87,7 +87,7 @@ the cache-hit return): 20 requests per 600 s per client by default, via
 `RATE_LIMIT_ENABLED`. Key is leftmost `X-Forwarded-For` (Render proxies, so
 `client.host` would bucket the whole world together), falling back to the peer
 address locally. Cache hits and invalid URLs consume nothing — the limiter
-guards upstream spend, not raw traffic. `/health` is unlimited. Buckets are
+guards upstream spend, not raw traffic. `/api/wake` (and its `/health` alias) is unlimited. Buckets are
 process-local; restart clears them (fail-open). Tests:
 `apps/api/tests/test_ratelimit.py` (`pnpm test` from root, `pytest` in
 `requirements.txt`).
@@ -110,8 +110,10 @@ process-local; restart clears them (fail-open). Tests:
 Render free instances spin down after ~15 min idle; the first request after that pays a ~30 s cold start. The
 frontend softens this (`apps/web`):
 
-- `pingHealth()` (`lib/api.ts`) — `GET /health`; its arrival starts a boot and it costs nothing upstream (no
-  provider call, no rate-limit tokens, CORS-allowed).
+- `pingHealth()` (`lib/api.ts`) — `GET /api/wake` (`/health` aliases the same handler); its arrival starts a
+  boot and it costs nothing upstream (no provider call, no rate-limit tokens, CORS-allowed). The frontend path
+  deliberately avoids the word "health": some adblock filter lists block health-style URLs client-side
+  (`net::ERR_BLOCKED_BY_CLIENT`), indistinguishable from a dead server in JS.
 - `useServerWake()` (`lib/useServerWake.ts`) — pings on page load (boot starts while the user is still pasting),
   on tab-return / first interaction if the last ping is >5 min old, and every 10 min while the tab is visible
   (under Render's 15-min sleep timer). One ping in flight at a time; hidden tabs skip the interval.
@@ -189,7 +191,7 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 ### Frontend note
 - `apiBase()` in `apps/web/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.
 - `friendlyError()` and the response types now live in `@shrutilipi/shared` — add new `detail` codes to its switch, and extend the `TranscriptErrorDetail` union at the same time.
-- Cold-start wake probe: `pingHealth()` in the same file; `useServerWake` + `ServerStatus` drive the pill (§4). No backend change needed — `/health` is already outside the limiter.
+- Cold-start wake probe: `pingHealth()` in the same file; `useServerWake` + `ServerStatus` drive the pill (§4). No backend change needed — `/api/wake` is already outside the limiter.
 
 ---
 

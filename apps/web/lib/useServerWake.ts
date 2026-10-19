@@ -15,7 +15,7 @@ const REPING_AFTER_MS = 5 * 60 * 1000;
 /**
  * Wakes the Render free-tier API and reports its state.
  *
- * Three triggers, all against /health (no upstream quota, no rate-limit
+ * Three triggers, all against /api/wake (no upstream quota, no rate-limit
  * tokens): page load, so the boot starts while the user is still pasting a
  * URL; tab return or first interaction, if the last ping is stale; and a
  * visible-tab keep-warm interval that stays under Render's sleep timer.
