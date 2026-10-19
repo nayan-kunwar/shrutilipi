@@ -32,6 +32,9 @@ for part in _frontend_url.split(","):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(_allowed),
+    # Local dev: Next picks whatever port is free (3000 is often taken), so
+    # allow any localhost port by regex instead of chasing them in _allowed.
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1):\d+$",
     allow_credentials=False,
     allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
