@@ -66,7 +66,7 @@ python tools/fetch.py HHUsHkYhkcM --srt --out subs.srt
 
 | Command | What runs |
 |---|---|
-| `pnpm test` | 22 pytest (limiter, wake probe, CORS) + 11 `node --test` formatter cases |
+| `pnpm test` | 29 pytest (limiter, wake probe, CORS) + 11 `node --test` formatter cases |
 | `pnpm typecheck` | `tsc --noEmit` across web + shared |
 | `pnpm build` | production Next build (stop `next dev` first — they share `.next`) |
 
@@ -74,6 +74,7 @@ python tools/fetch.py HHUsHkYhkcM --srt --out subs.srt
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| Site loads but every API call fails in the browser console with "Disallowed CORS origin" (and `OPTIONS /api/transcript` returns 400) | The API's CORS allowlist doesn't include the origin the browser is sending — usually after adding a custom domain to Vercel | The production origins are hardcoded in `apps/api/main.py` (`PROD_ORIGINS`), so this means the API hasn't been redeployed with the current code. Redeploy the API on Render. Check: `curl -s -D - -o /dev/null -X OPTIONS https://shrutilipi-backend.onrender.com/api/transcript -H "Origin: https://shrutilipi.nayankunwar.com" -H "Access-Control-Request-Method: GET"` must return `200` with `access-control-allow-origin: https://shrutilipi.nayankunwar.com` |
 | Page on 3001/3002 shows "Failed to fetch" + "The API is asleep" while the API logs healthy 200s | CORS: the browser blocked the response (server logs prove it answered) | Should not happen anymore — any localhost port is allowed via `allow_origin_regex` in `apps/api/main.py`. Verify: `curl -s -D - -H "Origin: http://localhost:3001" http://localhost:8000/api/wake \| grep -i access-control` echoes the origin |
 | Loads once, then chunks 404 (`main-app.js`, `app-pages-internals.js`) | Corrupted `.next` — usually two `next dev` processes shared the folder | Stop every `next dev`, `rm -rf apps/web/.next`, restart |
 | "The API is asleep" card, locally | The API really is down or on another port — the probe fetch failed | `curl http://localhost:8000/api/wake` → must return 200. If not, restart `pnpm dev` |

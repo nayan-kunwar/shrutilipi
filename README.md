@@ -42,13 +42,17 @@ curl "http://localhost:8000/api/transcript?url=https://www.youtube.com/watch?v=d
 | `pnpm dev` | Both apps in parallel via Turbo |
 | `pnpm build` | Builds the shared package, then the web app |
 | `pnpm typecheck` | `tsc --noEmit` across the TS packages |
-| `pnpm test` | pytest (22) + `node --test` formatter tests (11), via Turbo |
+| `pnpm test` | pytest (29) + `node --test` formatter tests (11), via Turbo |
 | `pnpm clean` | Drop build output and `node_modules` |
 
 ## Deploy
 
-- **Render (backend):** New Web Service → this repo → Root Directory `apps/api` → Runtime Docker → env `FRONTEND_URL=https://YOUR-APP.vercel.app`
-- **Vercel (frontend):** Import repo → Root Directory `apps/web` → env `NEXT_PUBLIC_API_URL=https://YOUR-API.onrender.com`
+- **Render (backend):** New Web Service → this repo → Root Directory `apps/api` → Runtime Docker → env `FRONTEND_URL=https://shrutilipi.nayankunwar.com,https://shrutilipi-rho.vercel.app`
+- **Vercel (frontend):** Import repo → Root Directory `apps/web` → env `NEXT_PUBLIC_API_URL=https://shrutilipi-backend.onrender.com`
+
+`FRONTEND_URL` is a comma-separated list of allowed frontend origins. The production
+origins are also hardcoded in the API (`apps/api/main.py`), so this env var can only
+*add* origins — it can no longer lock the site out of its own API.
 
 Vercel detects pnpm from the root `pnpm-lock.yaml`; the `packageManager` field in the
 root `package.json` pins the version.

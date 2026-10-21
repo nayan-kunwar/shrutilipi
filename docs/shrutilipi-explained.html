@@ -330,7 +330,7 @@ summary:hover{background:var(--bg-soft)}
   </div>
 
   <div class="kv">
-    <div><b>Frontend</b>Next.js 14 App Router, TS, Tailwind<br>shrutilipi-rho.vercel.app</div>
+    <div><b>Frontend</b>Next.js 14 App Router, TS, Tailwind<br>shrutilipi.nayankunwar.com</div>
     <div><b>Backend</b>FastAPI + uvicorn, Python 3.11, Docker<br>shrutilipi-backend.onrender.com</div>
     <div><b>API</b><code>GET /api/transcript?url=&amp;lang=</code><br><code>GET /api/wake</code> · <code>GET /health</code></div>
     <div><b>Third entry point</b><code>tools/fetch.py</code> &mdash; stdlib CLI<br>exit codes 0 / 1 / 2</div>
@@ -1114,23 +1114,27 @@ _CACHE[cache_key] = (time.time(), payload)</pre></div>
   </div>
 
   <h3>CORS</h3>
-  <div class="codewrap"><button class="copy" type="button">copy</button><pre>_frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-_allowed = {
-    _frontend_url,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-}
-# Support comma-separated FRONTEND_URL="https://a.vercel.app,https://b.vercel.app"
-for part in _frontend_url.split(","):
-    part = part.strip()
-    if part:
-        _allowed.add(part)
+  <div class="codewrap"><button class="copy" type="button">copy</button><pre>PROD_ORIGINS = (
+    "https://shrutilipi.nayankunwar.com",
+    "https://www.shrutilipi.nayankunwar.com",
+    "https://shrutilipi-rho.vercel.app",
+)
+
+def _allowed_origins() -&gt; set[str]:
+    origins = set(PROD_ORIGINS) | set(LOCAL_ORIGINS)
+    for part in os.getenv("FRONTEND_URL", "").split(","):
+        part = part.strip()
+        if part:
+            origins.add(part)
+    return origins
+
+_allowed = _allowed_origins()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(_allowed),     # a set, sorted for deterministic output
     allow_origin_regex=r"^http://(localhost|127\.0\.0\.1):\d+$",  # any local port
-    allow_credentials=False,             # no cookies -> credentials not needed
+    allow_credentials=False,             # no cookies -&gt; credentials not needed
     allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
 )</pre></div>
@@ -1150,8 +1154,17 @@ app.add_middleware(
     <code>Access-Control-Allow-Origin: *</code> would be legal here, which is exactly the check to make the day you
     <em>do</em> add auth.</li>
     <li><b>Comma-separated multi-origin</b> supports preview deployments. The real cost: <code>FRONTEND_URL</code> must
-    match the Vercel domain <em>exactly</em>, scheme included. A mismatch appears as a browser CORS error with no
+    match the frontend domain <em>exactly</em>, scheme included. A mismatch appears as a browser CORS error with no
     server-side log &mdash; which cost one deploy to learn, and is why <code>docs/operations.md</code> calls it out.</li>
+    <li><b>Production origins are hardcoded, not just env.</b> A custom domain was added to the Vercel project while the
+    API's allowlist still held only the Vercel URL, so the browser sent an <code>Origin</code> the API did not know:
+    preflight returned <code>400 "Disallowed CORS origin"</code> and the simple <code>GET /api/wake</code> came back 200
+    <em>without</em> <code>access-control-allow-origin</code>, so the browser discarded every response. The page loaded
+    perfectly; no API call worked. <code>FRONTEND_URL</code> is now additive-only &mdash; it can add origins but can no
+    longer lock the site out of its own API.</li>
+    <li><b>Split before adding.</b> The old code added the raw env string to the set <em>before</em> splitting it, so
+    <code>"https://a.app,https://b.app"</code> landed in the allowlist as one bogus origin (the two real ones were added
+    too, so it mostly worked by accident). Now it is split first &mdash; and the regression is pinned by a test.</li>
   </ul>
 
   <h3>All seventeen environment variables</h3>
@@ -1159,7 +1172,7 @@ app.add_middleware(
     <table class="compact">
       <thead><tr><th>Variable</th><th>Default</th><th>On Render</th><th>Read at</th><th>Purpose</th></tr></thead>
       <tbody>
-        <tr><td><code>FRONTEND_URL</code></td><td><code>http://localhost:3000</code></td><td>Vercel URL</td><td class="nw"><code>main.py:19</code></td><td>CORS allow-origin; comma-separated for many</td></tr>
+        <tr><td><code>FRONTEND_URL</code></td><td><code>http://localhost:3000</code></td><td>comma-separated origins</td><td class="nw"><code>main.py:40</code></td><td>CORS allow-origin; additive only &mdash; prod origins are hardcoded</td></tr>
         <tr><td><code>PORT</code></td><td><code>8000</code></td><td>platform-set</td><td class="nw"><code>Dockerfile</code></td><td>uvicorn bind port via <code>${PORT:-8000}</code></td></tr>
         <tr><td><code>CHAIN_ORDER</code></td><td><code>direct,supadata,serpapi</code></td><td><code>supadata,serpapi</code></td><td class="nw"><code>providers.py:336</code></td><td>Try-order; unknown names and duplicates dropped</td></tr>
         <tr><td><code>DIRECT_ENABLED</code></td><td><b><code>true</code></b></td><td><b><code>false</code></b></td><td class="nw"><code>providers.py:350</code></td><td>Render's IP is YouTube-blocked</td></tr>
@@ -1439,6 +1452,11 @@ exit /b %errorlevel%               REM propagate exit code (0/1/2) back to cmd</
           <td><code>operations.md</code> <em>said</em> &ldquo;static export&rdquo; while <code>next.config.js</code> had no <code>output: 'export'</code>.</td>
           <td>Fixed: <code>operations.md</code> &sect;2 now states it is a default Vercel build, not a static export &mdash; pick one and make the doc true, done.</td>
         </tr>
+        <tr>
+          <td><b>CORS allowlist drift <span class="pill easy">Fixed</span></b></td>
+          <td>Adding the custom domain to the Vercel project changed the browser's <code>Origin</code>, but the API's allowlist was still pinned to the old Vercel URL via <code>render.yaml</code>. Preflight: <code>400 "Disallowed CORS origin"</code>. The simple <code>GET /api/wake</code>: 200 with <em>no</em> <code>access-control-allow-origin</code>, so the browser discarded every response &mdash; the page looked fine while no API call worked.</td>
+          <td>Fixed: the production origins are hardcoded in <code>main.py</code> (<code>PROD_ORIGINS</code>) and <code>FRONTEND_URL</code> is now additive-only, so a domain change can never lock the site out of its own API again. The comma-splitting bug is fixed too (split before adding), and both are pinned by <code>tests/test_cors.py</code> &mdash; 11 CORS tests, including one that asserts the production origins survive an unrelated env value.</td>
+        </tr>
       </tbody>
     </table>
   </div>
@@ -1584,7 +1602,7 @@ exit /b %errorlevel%               REM propagate exit code (0/1/2) back to cmd</
 <footer style="margin-top:2.6rem;padding-top:1rem;border-top:1px solid var(--line);font-size:11.3px;color:var(--fg-faint)">
   Generated from <code>main @ 774d74d</code> plus the uncommitted pnpm-workspaces/Turborepo migration.
   Line references verified against the migrated working tree at the time of writing.
-  Live: <code>shrutilipi-rho.vercel.app</code> &middot; <code>shrutilipi-backend.onrender.com</code>.
+  Live: <code>shrutilipi.nayankunwar.com</code> &middot; <code>shrutilipi-backend.onrender.com</code>.
   This document is a study aid, not documentation &mdash; the project's own <code>README.md</code>,
   <code>docs/operations.md</code>, <code>tools/README.md</code> and <code>tools/BATCH.md</code> are the sources of truth.
 </footer>

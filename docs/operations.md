@@ -13,7 +13,7 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 | Display name | **ShrutiLipi** (camel-case; never `shrutilipi` in UI copy) |
 | Code slugs | `shrutilipi`, `shrutilipi-frontend`, `shrutilipi-backend` |
 | Repo | `git@github.com-personal:nayan-kunwar/shrutilipi.git`, branch `main` |
-| Frontend | https://shrutilipi-rho.vercel.app (Vercel) |
+| Frontend | https://shrutilipi.nayankunwar.com (custom domain on Vercel) — legacy: https://shrutilipi-rho.vercel.app |
 | Backend | https://shrutilipi-backend.onrender.com (Render free, Docker) |
 | Commit convention | Conventional commits; user says **"commit and p"** → commit + push. Never commit unasked. |
 
@@ -56,7 +56,7 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 | `SERPAPI_API_KEY` | — | secret, optional backup | |
 | `SERPAPI_ENABLED` | **`false`** | `true` only if key set | **Gotcha:** key alone does nothing without this flag |
 | `SERPAPI_TIME_UNIT` | `auto` | leave unset | `auto` = ms iff `max(start)>50000` **or** `max(duration)>100`; override `seconds`/`ms` if wrong |
-| `FRONTEND_URL` | — | Vercel URL (plain, not secret) | CORS allow-origin. **Must** match Vercel domain exactly or requests fail. Localhost ports are covered by the CORS regex, not this var. |
+| `FRONTEND_URL` | — | comma-separated origins (plain, not secret) | CORS allow-origin, **additive only**. The production origins are hardcoded in `apps/api/main.py` (`PROD_ORIGINS`), so this var can only *add* origins — it can no longer lock the site out of its own API. Localhost ports are covered by the CORS regex, not this var. |
 | `WEBSHARE_PROXY_USERNAME/PASSWORD/HOSTS` | — | **leave empty** | Free proxies are dead (`Connection refused` + YouTube blocks datacenter IPs). Kept as legacy only. |
 | `WEBSHARE_PROXY_LIST` | — | — | Alternative: comma-separated full proxy URLs |
 | `RATE_LIMIT_ENABLED` | `true` | leave unset | Kill switch: `0`/`false`/`no`/`off` disables the limiter |
@@ -139,8 +139,16 @@ burn free instance hours and hide the problem rather than surface it.
 1. `git add <files>` → `git commit -m "<type>: <what>"` → `git push` (only on request: "commit and p").
 2. Render → **Save, rebuild, and deploy** (if env changed) or wait for auto-deploy.
 3. Smoke test: `GET https://shrutilipi-backend.onrender.com/health`.
-4. Functional test: request `HHUsHkYhkcM` on the Vercel frontend (or `curl "…/api/transcript?url=HHUsHkYhkcM&lang=en"`).
-5. Render logs should show `transcript served by SupadataProvider video_id=… segments=…`.
+4. CORS smoke test (after any origin/domain change):
+   ```bash
+   curl -s -D - -o /dev/null -X OPTIONS https://shrutilipi-backend.onrender.com/api/transcript \
+     -H "Origin: https://shrutilipi.nayankunwar.com" -H "Access-Control-Request-Method: GET"
+   ```
+   Expect `200` **and** `access-control-allow-origin: https://shrutilipi.nayankunwar.com`.
+   A `400 "Disallowed CORS origin"` means the allowlist is stale — see §6.
+   Repeat with `Origin: http://localhost:3000` for the dev path.
+5. Functional test: request `HHUsHkYhkcM` on the Vercel frontend (or `curl "…/api/transcript?url=HHUsHkYhkcM&lang=en"`).
+6. Render logs should show `transcript served by SupadataProvider video_id=… segments=…`.
 
 Known-good test video: **`HHUsHkYhkcM`** (969 en segments, title via oEmbed).
 
@@ -148,6 +156,8 @@ Known-good test video: **`HHUsHkYhkcM`** (969 en segments, title via oEmbed).
 
 ## 6. Known issues / history
 
+- **Production CORS broke on the custom domain (fixed 2026-10-22)** — `https://shrutilipi.nayankunwar.com` was added to the Vercel project without touching the API's allowlist, so the browser sent a new `Origin` the API didn't know. Preflight returned `400 "Disallowed CORS origin"`, and the simple `GET /api/wake` returned 200 **without** `access-control-allow-origin`, so the browser discarded every response. The page looked fine; no API call worked. Root cause: `render.yaml` pinned `FRONTEND_URL` to only the Vercel URL. Fix: the production origins are now hardcoded in `apps/api/main.py` (`PROD_ORIGINS`) **and** the env var is additive-only, so a domain change can never lock the site out of its own API again. Note the frontend needs its own redeploy for the `SITE_URL` change to reach `sitemap.xml`/`robots.txt`.
+- **`FRONTEND_URL` was parsed wrong** — the raw env string was added to the allowlist *before* being split on commas, so `"https://a.app,https://b.app"` landed in the set as one bogus origin (the two real ones were also added, so it mostly worked by accident). Now it is split first. Covered by `tests/test_cors.py`.
 - **Render IP is YouTube-blocked** — root cause of the original 502 `youtube_blocked` (`RequestBlocked` in `_assert_playability`). Direct level stays off on Render; `DIRECT_ENABLED=true` is the env-only re-enable path if ever needed (e.g., residential egress).
 - **Webshare free proxies are dead** — 10 datacenter IPs, all `Connection refused` or YouTube-blocked. Code kept (`b31ff24`) as legacy; harmless because hosted-active skips the proxy hop. Don't bother debugging them.
 - **Hosted API shapes verified** (2026-09-26, dummy keys → 401 on both):
@@ -186,7 +196,7 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 - **Keyless local env = direct captions only** (correct default; your home IP isn't blocked).
 - To test chain behavior locally, export any subset of the §3 vars before starting uvicorn.
 - Unit-checks used during development (chain parse, eligibility, terminal, time-unit auto, proxy skip) — re-add as a test file if this grows.
-- Test suites: `apps/api/tests/` (18 pytest — limiter + 429 wiring, wake-probe contract) via `pnpm test` or `pytest` from `apps/api/`, and `packages/shared/src/subtitles.test.ts` (11 `node --test` cases for the SRT/VTT formatters — Node ≥22.6 runs the TS natively, no test framework). `pnpm test` runs both through Turbo; `pytest` is pinned in `requirements.txt`.
+- Test suites: `apps/api/tests/` (29 pytest — limiter + 429 wiring, wake-probe contract, CORS contract) via `pnpm test` or `pytest` from `apps/api/`, and `packages/shared/src/subtitles.test.ts` (11 `node --test` cases for the SRT/VTT formatters — Node ≥22.6 runs the TS natively, no test framework). `pnpm test` runs both through Turbo; `pytest` is pinned in `requirements.txt`.
 
 ### Frontend note
 - `apiBase()` in `apps/web/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.
@@ -207,6 +217,7 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 - `apps/web/app/layout.tsx`: `metadataBase`, template title, description, keywords (`youtube to text`, `youtube transcript downloader`, …), OG + Twitter cards, canonical `/`.
 - `apps/web/app/sitemap.ts` + `robots.ts` → `/sitemap.xml`, `/robots.txt` (single-page app, 1 URL).
 - **Fixed:** `SITE_URL` used to be copy-pasted into 3 files (`layout.tsx`, `sitemap.ts`, `robots.ts`), so a domain change could silently update two of three. It now lives once in `@shrutilipi/shared` and is imported by all three.
+- `SITE_URL` is now `https://shrutilipi.nayankunwar.com` (the custom domain), with `https://shrutilipi-rho.vercel.app` kept as the legacy URL. It drives `metadataBase`, the canonical link, OG `url`, `sitemap.xml` and `robots.txt` — so a change here needs a **frontend** redeploy to reach the live pages.
 
 ### CLI helper — `tools/fetch.py`
 - **Full usage guide with examples: [`tools/README.md`](../tools/README.md)** (dummy IDs only).
