@@ -6,7 +6,9 @@ services:
     plan: free
     envVars:
       - key: FRONTEND_URL
-        value: https://shrutilipi-rho.vercel.app
+        # Comma-separated. The API also hardcodes these production origins
+        # (see apps/api/main.py), so this list only ever *adds* origins.
+        value: https://shrutilipi.nayankunwar.com,https://shrutilipi-rho.vercel.app
       - key: DIRECT_ENABLED
         value: "false"
       - key: CHAIN_ORDER

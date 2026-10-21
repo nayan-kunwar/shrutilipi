@@ -16,18 +16,43 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="ShrutiLipi", version="1.0.0")
 
-# --- CORS: allow Vercel frontend + local dev ---
-_frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-_allowed = {
-    _frontend_url,
+# --- CORS: allow the production frontends + local dev ---
+# The production origins live here, not only in Render's env, because a domain
+# change (a custom domain added to the Vercel project) once broke every API
+# call until someone remembered to edit the dashboard. FRONTEND_URL can still
+# *add* origins, but it can no longer take the site down.
+#
+# Production origins stay explicit — no wildcard for preview deployments.
+PROD_ORIGINS = (
+    "https://shrutilipi.nayankunwar.com",
+    "https://www.shrutilipi.nayankunwar.com",
+    "https://shrutilipi-rho.vercel.app",
+)
+
+# Local dev. The ports are covered by the regex below as well, but naming the
+# common ones keeps the middleware config readable.
+LOCAL_ORIGINS = (
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-}
-# Support comma-separated FRONTEND_URL="https://a.vercel.app,https://b.vercel.app"
-for part in _frontend_url.split(","):
-    part = part.strip()
-    if part:
-        _allowed.add(part)
+)
+
+
+def _allowed_origins() -> set[str]:
+    """The origins this API answers CORS requests for.
+
+    FRONTEND_URL may be a comma-separated list ("https://a.app,https://b.app").
+    It is split *before* being added to the set: adding the raw string first
+    would put the whole "a,b" string into the allowlist as one bogus origin.
+    """
+    origins = set(PROD_ORIGINS) | set(LOCAL_ORIGINS)
+    for part in os.getenv("FRONTEND_URL", "").split(","):
+        part = part.strip()
+        if part:
+            origins.add(part)
+    return origins
+
+
+_allowed = _allowed_origins()
 
 app.add_middleware(
     CORSMiddleware,
