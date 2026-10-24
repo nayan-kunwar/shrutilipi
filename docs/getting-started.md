@@ -96,7 +96,7 @@ python tools/fetch.py HHUsHkYhkcM --srt --out subs.srt
 
 | Command | What runs |
 |---|---|
-| `pnpm test` | 58 pytest (limiter, wake probe, CORS, summary contract/cache/locks, LLM adapter) + 15 `node --test` cases (SRT/VTT + `friendlyError`) |
+| `pnpm test` | 67 pytest (limiter, wake probe, CORS, summary contract/cache/locks, LLM adapter) + 15 `node --test` cases (SRT/VTT + `friendlyError`) |
 | `pnpm typecheck` | `tsc --noEmit` across web + shared |
 | `pnpm build` | production Next build (stop `next dev` first — they share `.next`) |
 

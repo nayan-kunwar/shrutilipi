@@ -97,6 +97,47 @@ def test_build_summarizer_garbage_limits_fall_back(monkeypatch):
     assert s._max_output_tokens == 1024
 
 
+def _configure(monkeypatch, base_url):
+    monkeypatch.setenv("SUMMARY_BASE_URL", base_url)
+    monkeypatch.setenv("SUMMARY_API_KEY", "k")
+    monkeypatch.setenv("SUMMARY_MODEL", "m")
+    monkeypatch.delenv("SUMMARY_REASONING_EFFORT", raising=False)
+
+
+def test_gemini_disables_thinking_by_default(monkeypatch):
+    # Gemini counts thinking tokens toward max_tokens; the summary task does
+    # not need reasoning, so the adapter opts out explicitly.
+    _configure(monkeypatch, "https://generativelanguage.googleapis.com/v1beta/openai")
+    s = build_summarizer()
+    assert s is not None
+    assert s._reasoning_effort == "none"
+
+
+def test_non_gemini_sends_no_reasoning_field_by_default(monkeypatch):
+    # Unknown OpenAI-compatible servers may reject the field; only send it
+    # when the vendor is known to support it or the operator asks for it.
+    _configure(monkeypatch, "https://llm.example/v1")
+    s = build_summarizer()
+    assert s is not None
+    assert s._reasoning_effort is None
+
+
+def test_reasoning_effort_env_overrides_the_vendor_default(monkeypatch):
+    _configure(monkeypatch, "https://llm.example/v1")
+    monkeypatch.setenv("SUMMARY_REASONING_EFFORT", "high")
+    s = build_summarizer()
+    assert s is not None
+    assert s._reasoning_effort == "high"
+
+
+def test_blank_reasoning_effort_opts_out_even_on_gemini(monkeypatch):
+    _configure(monkeypatch, "https://generativelanguage.googleapis.com/v1beta/openai")
+    monkeypatch.setenv("SUMMARY_REASONING_EFFORT", "")
+    s = build_summarizer()
+    assert s is not None
+    assert s._reasoning_effort is None
+
+
 # --- adapter -----------------------------------------------------------------
 
 
@@ -119,6 +160,28 @@ def test_summarize_parses_content_and_sends_expected_request():
     assert '"model":"test-model"' in seen["body"].replace(" ", "")
     assert "hello transcript" in seen["body"]
     assert "TL;DR" in seen["body"]  # prompt asks for the agreed format
+
+
+def test_summarize_sends_reasoning_effort_when_configured():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = request.read().decode()
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    _summarizer(handler, reasoning_effort="none").summarize("hello")
+    assert '"reasoning_effort":"none"' in seen["body"].replace(" ", "")
+
+
+def test_summarize_omits_reasoning_effort_when_unset():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = request.read().decode()
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    _summarizer(handler).summarize("hello")
+    assert "reasoning_effort" not in seen["body"]
 
 
 def test_summarize_sends_truncated_transcript():
@@ -185,9 +248,11 @@ def test_summarize_transport_error_is_summary_failed():
         _summarizer(handler).summarize("hello")
 
 
-def test_summarize_length_finish_is_summary_failed():
-    # Gemini counts thinking tokens toward max_tokens; a "length" stop means
-    # the visible answer was cut off mid-sentence and must not be cached.
+@pytest.mark.parametrize("finish_reason", ["length", "max_tokens", "MAX_TOKENS", "Length"])
+def test_summarize_truncated_finish_is_summary_failed(finish_reason):
+    # Gemini counts thinking tokens toward max_tokens; a length stop means the
+    # visible answer was cut off mid-sentence and must not be cached. Providers
+    # spell the reason differently and in different cases.
     def handler(request):
         return httpx.Response(
             200,
@@ -195,7 +260,7 @@ def test_summarize_length_finish_is_summary_failed():
                 "choices": [
                     {
                         "message": {"content": "TL;DR: cut off mid-sen"},
-                        "finish_reason": "length",
+                        "finish_reason": finish_reason,
                     }
                 ]
             },
@@ -208,5 +273,6 @@ def test_summarize_length_finish_is_summary_failed():
 
 
 def test_prompt_version_is_part_of_the_contract():
-    # The route puts this in the cache key; it must change when the prompt does.
-    assert PROMPT_VERSION == "v2"
+    # The route puts this in the cache key; it must change when the prompt or
+    # generation settings do.
+    assert PROMPT_VERSION == "v3"

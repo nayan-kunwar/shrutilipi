@@ -34,15 +34,20 @@ logger = logging.getLogger("shrutilipi")
 # summary cache key so old cached summaries are never served under a new prompt.
 # v2: 1024-token output cap (Gemini counts thinking tokens against
 #     max_tokens) + same-language summaries.
-PROMPT_VERSION = "v2"
+# v3: disable Gemini thinking via reasoning_effort=none; reject any
+#     case-variant of a length/max_tokens stop.
+PROMPT_VERSION = "v3"
 
 DEFAULT_MAX_CHARS = 15_000
 DEFAULT_TIMEOUT_SECONDS = 30
-# Gemini 2.5 Flash counts thinking tokens toward max_tokens; 350 was enough to
-# truncate the visible answer mid-sentence. 1024 leaves room for thinking plus
-# the ~120-word answer while keeping a hard ceiling on cost.
+# Kept as a safety ceiling even though thinking is off on Gemini: a runaway
+# answer must never be billed without bound.
 DEFAULT_MAX_OUTPUT_TOKENS = 1024
 TRUNCATION_MARKER = "\n[... transcript truncated for summarization ...]"
+
+# Google's OpenAI-compatible endpoint accepts `reasoning_effort: "none"` for
+# Gemini 2.5, which stops thinking tokens from consuming the output budget.
+GEMINI_HOST = "generativelanguage.googleapis.com"
 
 SYSTEM_PROMPT = (
     "You summarize YouTube video transcripts for a quick read. "
@@ -92,6 +97,28 @@ def _env_int(name: str, default: int) -> int:
     return value if value > 0 else default
 
 
+def default_reasoning_effort(base_url: str) -> Optional[str]:
+    """Thinking is off by default on Gemini; other vendors keep their default.
+
+    Gemini 2.5 counts thinking tokens toward max_tokens, so on a short summary
+    task it can spend the whole budget before writing the visible answer.
+    """
+    return "none" if GEMINI_HOST in base_url else None
+
+
+def _env_reasoning_effort(base_url: str) -> Optional[str]:
+    """SUMMARY_REASONING_EFFORT wins; unset means the per-vendor default.
+
+    An explicitly empty value (e.g. `SUMMARY_REASONING_EFFORT=`) opts out and
+    sends no field at all, which matters for providers that reject unknown
+    parameters.
+    """
+    raw = os.getenv("SUMMARY_REASONING_EFFORT")
+    if raw is None:
+        return default_reasoning_effort(base_url)
+    return raw.strip() or None
+
+
 class OpenAICompatibleSummarizer:
     """POST {base}/chat/completions — works with any OpenAI-compatible server."""
 
@@ -103,6 +130,7 @@ class OpenAICompatibleSummarizer:
         timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
         max_chars: int = DEFAULT_MAX_CHARS,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+        reasoning_effort: Optional[str] = None,
         transport: Optional[httpx.BaseTransport] = None,
     ):
         self._endpoint = base_url.rstrip("/") + "/chat/completions"
@@ -111,6 +139,7 @@ class OpenAICompatibleSummarizer:
         self._timeout = timeout_seconds
         self._max_chars = max_chars
         self._max_output_tokens = max_output_tokens
+        self._reasoning_effort = reasoning_effort
         self._transport = transport
 
     def summarize(self, plain_text: str) -> str:
@@ -127,6 +156,8 @@ class OpenAICompatibleSummarizer:
             "temperature": 0.2,
             "max_tokens": self._max_output_tokens,
         }
+        if self._reasoning_effort:
+            body["reasoning_effort"] = self._reasoning_effort
         try:
             with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
                 response = client.post(
@@ -155,9 +186,11 @@ class OpenAICompatibleSummarizer:
             raise SummaryError("summary_failed", "malformed upstream response") from exc
 
         # Some providers (notably Gemini Flash) count reasoning tokens toward
-        # max_tokens, so a "length" stop can truncate the visible answer
+        # max_tokens, so a length stop can truncate the visible answer
         # mid-sentence. Never cache that: fail so the retry can succeed.
-        if finish_reason in ("length", "max_tokens"):
+        # Normalize case: OpenAI says "length", Gemini may say "MAX_TOKENS".
+        reason = str(finish_reason).lower() if finish_reason is not None else ""
+        if reason in ("length", "max_tokens"):
             raise SummaryError("summary_failed", "upstream output truncated")
 
         if not isinstance(content, str) or not content.strip():
@@ -184,11 +217,13 @@ def build_summarizer() -> Optional[OpenAICompatibleSummarizer]:
         timeout_seconds=_env_int("SUMMARY_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS),
         max_chars=_env_int("SUMMARY_MAX_CHARS", DEFAULT_MAX_CHARS),
         max_output_tokens=_env_int("SUMMARY_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS),
+        reasoning_effort=_env_reasoning_effort(base_url),
     )
     logger.info(
-        "summary generation enabled: model=%s max_chars=%d timeout=%ds",
+        "summary generation enabled: model=%s max_chars=%d timeout=%ds reasoning_effort=%s",
         summarizer.model,
         summarizer._max_chars,
         summarizer._timeout,
+        summarizer._reasoning_effort or "provider-default",
     )
     return summarizer

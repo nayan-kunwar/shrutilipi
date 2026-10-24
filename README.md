@@ -66,7 +66,7 @@ truncation and the cost formula are in
 | `pnpm dev` | Both apps in parallel via Turbo |
 | `pnpm build` | Shared + web production build, plus a `py_compile` syntax check for the API |
 | `pnpm typecheck` | `tsc --noEmit` across the TS packages |
-| `pnpm test` | pytest (58) + `node --test` cases (15), via Turbo |
+| `pnpm test` | pytest (67) + `node --test` cases (15), via Turbo |
 | `pnpm clean` | Drop build output and `node_modules` |
 
 ## Deploy

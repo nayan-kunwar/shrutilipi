@@ -211,7 +211,7 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 - **Keyless local env = direct captions only** (correct default; your home IP isn't blocked).
 - To test chain behavior locally, export any subset of the §3 vars before starting uvicorn.
 - Unit-checks used during development (chain parse, eligibility, terminal, time-unit auto, proxy skip) — re-add as a test file if this grows.
-- Test suites: `apps/api/tests/` (**58 pytest** — limiter + 429 wiring, wake-probe contract, CORS contract, summary endpoint contract/cache/locks/accounting, LLM adapter + truncation) via `pnpm test` or `pytest` from `apps/api/`, and `packages/shared/src/` (**15 `node --test` cases** — 11 SRT/VTT formatter cases + 4 `friendlyError` copy cases; Node ≥22.6 runs the TS natively, no test framework). `pnpm test` runs both through Turbo; `pytest` is pinned in `requirements.txt`. The summary suites stub the transcript provider and the LLM, so they need no key and no network.
+- Test suites: `apps/api/tests/` (**67 pytest** — limiter + 429 wiring, wake-probe contract, CORS contract, summary endpoint contract/cache/locks/accounting, LLM adapter + truncation) via `pnpm test` or `pytest` from `apps/api/`, and `packages/shared/src/` (**15 `node --test` cases** — 11 SRT/VTT formatter cases + 4 `friendlyError` copy cases; Node ≥22.6 runs the TS natively, no test framework). `pnpm test` runs both through Turbo; `pytest` is pinned in `requirements.txt`. The summary suites stub the transcript provider and the LLM, so they need no key and no network.
 
 ### Frontend note
 - `apiBase()` in `apps/web/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.
@@ -253,8 +253,9 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 **What ships:** a `Generate summary` button under the transcript. Nothing runs
 until it is clicked — `GET /api/transcript` never calls an LLM, so the transcript
 path keeps its old latency and cost. Output is one `TL;DR:` sentence plus 3–5
-`•` bullets, asked for in the system prompt and capped at 1,024 output tokens
-(the cap leaves room for models that spend tokens on reasoning).
+`•` bullets, asked for in the system prompt and capped at 1,024 output tokens.
+On Gemini the adapter also sends `reasoning_effort: "none"`, because Gemini 2.5
+counts thinking tokens against that cap.
 
 ### Contract
 
@@ -305,7 +306,8 @@ budget.
 | `SUMMARY_MODEL` | — | Render | e.g. `gemini-2.5-flash`, `llama-3.3-70b-versatile` |
 | `SUMMARY_TIMEOUT_SECONDS` | `30` | optional | Per LLM call |
 | `SUMMARY_MAX_CHARS` | `15000` | optional | Prompt input cap (see Truncation) |
-| `SUMMARY_MAX_OUTPUT_TOKENS` | `1024` | optional | Output cap; also covers reasoning tokens on models like Gemini Flash |
+| `SUMMARY_MAX_OUTPUT_TOKENS` | `1024` | optional | Output cap; also a hard ceiling if a provider insists on reasoning tokens |
+| `SUMMARY_REASONING_EFFORT` | `none` on Gemini, unset elsewhere | optional | See [Reasoning tokens](#reasoning-tokens). Set to `low`/`medium`/`high` to ask for thinking, or to an **empty** value to send no field at all |
 | `SUMMARY_RATE_LIMIT_REQUESTS` | `5` | optional | Per IP, misses only |
 | `SUMMARY_RATE_LIMIT_WINDOW_SECONDS` | `600` | optional | Refill window |
 | `SUMMARY_RATE_LIMIT_ENABLED` | `true` | optional | Break-glass kill switch |
@@ -319,6 +321,8 @@ starts cold instead of serving old text. No code or frontend change.
 **Live production config (verified 2026-10-25):**
 `SUMMARY_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`,
 `SUMMARY_MODEL=gemini-2.5-flash`. The key exists only in Render's dashboard.
+`SUMMARY_REASONING_EFFORT` is unset, so the Gemini default (`none`) applies; it
+does **not** need to be added to Render.
 
 ### Truncation
 
@@ -334,6 +338,22 @@ Long videos are summarized from their opening ~15k characters only; the tail is
 never sent. Unit-tested in `tests/test_summarize.py`. Chunked/recursive
 summarization is intentionally not implemented — it multiplies cost and latency
 and has no consumer yet.
+
+### Reasoning tokens
+
+Gemini 2.5 models think by default, and those thinking tokens count against
+`max_tokens`/`max_output_tokens`. On a short task they can consume the entire
+budget before the visible answer starts — the original production truncation.
+The adapter therefore sends `reasoning_effort: "none"` whenever
+`SUMMARY_BASE_URL` contains `generativelanguage.googleapis.com`.
+
+`SUMMARY_REASONING_EFFORT` overrides that default verbatim. An explicitly
+**empty** value sends no field at all, which is the safe choice for
+OpenAI-compatible servers that reject unknown parameters. Non-Gemini vendors
+send no field unless the override is set. Whatever the setting, a stop of
+`length` or `max_tokens` (matched case-insensitively) is a failure
+(`502 summary_failed`) and is never cached, so a cut-off answer cannot be
+served for 24 hours.
 
 ### Cost
 
@@ -361,8 +381,10 @@ took ~4.5 s end-to-end (transcript fetch + LLM); the cached repeat was
 instant. The API response does not expose provider token usage, so the
 cap-based figure remains the honest upper bound. The original 350-token cap was
 too low because Gemini counts thinking tokens toward `max_tokens`, which
-truncated the visible answer mid-sentence; the default is now 1,024 and a
-`finish_reason="length"` response is rejected (`502`) rather than cached.
+truncated the visible answer mid-sentence. The cap is now 1,024, Gemini thinking
+is disabled (`reasoning_effort="none"`), and any `length`/`max_tokens` stop is
+rejected (`502`) rather than cached. Because the prompt/cache key is `v3`, old
+truncated entries cannot be served.
 
 Honesty caveats: token counts vary by language (Devanagari/Tamil cost more per
 character), and pricing/quota terms change. The formula and the caps are the
