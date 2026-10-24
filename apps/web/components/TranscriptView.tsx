@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   formatTime,
   toSrt,
@@ -11,6 +11,11 @@ import {
 import { fetchSummary } from "../lib/api";
 import ShareButtons from "./ShareButtons";
 
+const YT_ORIGIN = "https://www.youtube.com";
+// The handshake id only has to be unique among players on this page; one
+// TranscriptView (and therefore one player) is mounted at a time.
+const PLAYER_ID = 1;
+
 export default function TranscriptView({ data }: { data: TranscriptResponse }) {
   const [showTimestamps, setShowTimestamps] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -19,6 +24,10 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryCopied, setSummaryCopied] = useState(false);
   const playerRef = useRef<HTMLIFrameElement>(null);
+  const playerReadyRef = useRef(false);
+  const pendingSeekRef = useRef<number | null>(null);
+  const listenTimerRef = useRef<number | null>(null);
+  const listenAttemptsRef = useRef(0);
 
   const textToCopy = useMemo(() => {
     if (!showTimestamps) return data.plainText;
@@ -65,24 +74,93 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
     }
   }
 
+  const postToPlayer = useCallback((message: unknown) => {
+    playerRef.current?.contentWindow?.postMessage(JSON.stringify(message), YT_ORIGIN);
+  }, []);
+
+  const sendPlayerCommand = useCallback(
+    (func: string, args: unknown[] = []) => {
+      postToPlayer({ event: "command", func, args, id: PLAYER_ID });
+    },
+    [postToPlayer]
+  );
+
+  const stopListening = useCallback(() => {
+    if (listenTimerRef.current !== null) {
+      window.clearInterval(listenTimerRef.current);
+      listenTimerRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Shake hands with the embed so we know when it can accept commands.
+   *
+   * YouTube only starts reporting readiness after the parent sends a
+   * `listening` message (the same handshake its IFrame API script performs).
+   * Until `onReady` arrives, a `seekTo` can be silently dropped, which is easy
+   * to hit on a cold embed: click a timestamp as soon as the transcript
+   * renders and the player is still booting. Ping until ready, then stop.
+   */
+  const startListening = useCallback(() => {
+    playerReadyRef.current = false;
+    stopListening();
+    listenAttemptsRef.current = 0;
+    const ping = () => {
+      listenAttemptsRef.current += 1;
+      // Give up after ~60 s; direct commands remain best-effort thereafter.
+      if (listenAttemptsRef.current > 240) {
+        stopListening();
+        return;
+      }
+      postToPlayer({ event: "listening", id: PLAYER_ID });
+    };
+    ping();
+    listenTimerRef.current = window.setInterval(ping, 250);
+  }, [postToPlayer, stopListening]);
+
+  useEffect(() => {
+    function onPlayerMessage(event: MessageEvent) {
+      if (event.origin !== YT_ORIGIN) return;
+      if (event.source !== playerRef.current?.contentWindow) return;
+      let message: { event?: string } | null = null;
+      try {
+        message = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+      } catch {
+        return;
+      }
+      if (message?.event !== "onReady") return;
+      playerReadyRef.current = true;
+      stopListening();
+      const pending = pendingSeekRef.current;
+      if (pending !== null) {
+        pendingSeekRef.current = null;
+        sendPlayerCommand("seekTo", [pending, true]);
+        sendPlayerCommand("playVideo");
+      }
+    }
+
+    window.addEventListener("message", onPlayerMessage);
+    startListening();
+    return () => {
+      window.removeEventListener("message", onPlayerMessage);
+      stopListening();
+    };
+  }, [sendPlayerCommand, startListening, stopListening]);
+
   /**
    * Seek the embedded player via YouTube's postMessage command API.
    *
-   * The iframe is loaded with `enablejsapi=1`; no external SDK is needed, so
-   * there is no third-party script to load or CSP exception to maintain.
-   * `playVideo` runs in the same click gesture, so autoplay policies allow it.
+   * No external SDK is loaded, so there is no third-party script or CSP
+   * exception to maintain. A target clicked before the embed is ready is
+   * queued and applied on `onReady`; the immediate send is a fallback for the
+   * case where the handshake never completes but the player is nevertheless
+   * accepting commands. `playVideo` runs in the same click gesture, so
+   * autoplay policies allow it.
    */
   function seekTo(seconds: number) {
-    const frame = playerRef.current;
-    if (!frame?.contentWindow) return;
-    const send = (func: string, args: unknown[] = []) => {
-      frame.contentWindow?.postMessage(
-        JSON.stringify({ event: "command", func, args }),
-        "https://www.youtube.com"
-      );
-    };
-    send("seekTo", [seconds, true]);
-    send("playVideo");
+    if (!playerReadyRef.current) pendingSeekRef.current = seconds;
+    sendPlayerCommand("seekTo", [seconds, true]);
+    sendPlayerCommand("playVideo");
   }
 
   function downloadFile(name: string, content: string, mime: string) {
