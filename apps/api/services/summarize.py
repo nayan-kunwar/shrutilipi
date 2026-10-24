@@ -30,20 +30,27 @@ import httpx
 
 logger = logging.getLogger("shrutilipi")
 
-# Bump when the prompt changes; it is part of the summary cache key so old
-# cached summaries are never served under a new prompt.
-PROMPT_VERSION = "v1"
+# Bump when the prompt or generation behavior changes; it is part of the
+# summary cache key so old cached summaries are never served under a new prompt.
+# v2: 1024-token output cap (Gemini counts thinking tokens against
+#     max_tokens) + same-language summaries.
+PROMPT_VERSION = "v2"
 
 DEFAULT_MAX_CHARS = 15_000
 DEFAULT_TIMEOUT_SECONDS = 30
-DEFAULT_MAX_OUTPUT_TOKENS = 350
+# Gemini 2.5 Flash counts thinking tokens toward max_tokens; 350 was enough to
+# truncate the visible answer mid-sentence. 1024 leaves room for thinking plus
+# the ~120-word answer while keeping a hard ceiling on cost.
+DEFAULT_MAX_OUTPUT_TOKENS = 1024
 TRUNCATION_MARKER = "\n[... transcript truncated for summarization ...]"
 
 SYSTEM_PROMPT = (
     "You summarize YouTube video transcripts for a quick read. "
     "Reply in plain text with no markdown headings: first a line starting "
-    '"TL;DR: " with one sentence, then a blank line, then 3-5 bullet points '
-    'starting with "• ". Keep the whole answer under 120 words.'
+    '"TL;DR: " with exactly one complete sentence, then a blank line, then '
+    'exactly 3-5 bullet points starting with "• ". Keep the whole answer under '
+    "120 words. Write the summary in the same language as the transcript. "
+    "Never stop mid-sentence."
 )
 
 
@@ -141,9 +148,17 @@ class OpenAICompatibleSummarizer:
             raise SummaryError("summary_failed", f"upstream status {response.status_code}")
 
         try:
-            content = response.json()["choices"][0]["message"]["content"]
-        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            choice = response.json()["choices"][0]
+            content = choice["message"]["content"]
+            finish_reason = choice.get("finish_reason")
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
             raise SummaryError("summary_failed", "malformed upstream response") from exc
+
+        # Some providers (notably Gemini Flash) count reasoning tokens toward
+        # max_tokens, so a "length" stop can truncate the visible answer
+        # mid-sentence. Never cache that: fail so the retry can succeed.
+        if finish_reason in ("length", "max_tokens"):
+            raise SummaryError("summary_failed", "upstream output truncated")
 
         if not isinstance(content, str) or not content.strip():
             raise SummaryError("summary_failed", "empty upstream response")

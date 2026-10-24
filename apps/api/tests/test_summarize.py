@@ -94,6 +94,7 @@ def test_build_summarizer_garbage_limits_fall_back(monkeypatch):
     assert s is not None
     assert s._max_chars == 15_000
     assert s._timeout == 30
+    assert s._max_output_tokens == 1024
 
 
 # --- adapter -----------------------------------------------------------------
@@ -184,6 +185,28 @@ def test_summarize_transport_error_is_summary_failed():
         _summarizer(handler).summarize("hello")
 
 
+def test_summarize_length_finish_is_summary_failed():
+    # Gemini counts thinking tokens toward max_tokens; a "length" stop means
+    # the visible answer was cut off mid-sentence and must not be cached.
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {"content": "TL;DR: cut off mid-sen"},
+                        "finish_reason": "length",
+                    }
+                ]
+            },
+        )
+
+    with pytest.raises(SummaryError) as info:
+        _summarizer(handler).summarize("hello")
+    assert info.value.detail == "summary_failed"
+    assert "truncated" in str(info.value)
+
+
 def test_prompt_version_is_part_of_the_contract():
     # The route puts this in the cache key; it must change when the prompt does.
-    assert PROMPT_VERSION == "v1"
+    assert PROMPT_VERSION == "v2"

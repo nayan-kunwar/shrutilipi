@@ -48,8 +48,9 @@ clear "isn't configured" message and transcripts are unaffected.
 
 Open the web URL, paste any YouTube link or video ID, **Get transcript** →
 copy it, download `.txt` / `.srt` / `.vtt`, or share. Timestamps toggle adds
-`[m:ss]` prefixes to the text copy/download. **Generate summary** (optional)
-produces a `TL;DR:` plus bullets on demand; nothing is generated on page load.
+`[m:ss]` prefixes to the text copy/download **and** turns each timestamp into a
+seek button for the embedded player. **Generate summary** (optional) produces a
+`TL;DR:` plus bullets on demand; nothing is generated on page load.
 
 ## Optional: AI summary
 
@@ -95,7 +96,7 @@ python tools/fetch.py HHUsHkYhkcM --srt --out subs.srt
 
 | Command | What runs |
 |---|---|
-| `pnpm test` | 57 pytest (limiter, wake probe, CORS, summary contract/cache/locks, LLM adapter) + 15 `node --test` cases (SRT/VTT + `friendlyError`) |
+| `pnpm test` | 58 pytest (limiter, wake probe, CORS, summary contract/cache/locks, LLM adapter) + 15 `node --test` cases (SRT/VTT + `friendlyError`) |
 | `pnpm typecheck` | `tsc --noEmit` across web + shared |
 | `pnpm build` | production Next build (stop `next dev` first — they share `.next`) |
 

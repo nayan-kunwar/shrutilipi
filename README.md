@@ -1,6 +1,6 @@
 # ShrutiLipi
 
-Paste a YouTube URL → get a transcript you can copy or download as `.txt` / `.srt` / `.vtt`, plus an optional AI summary generated only when you click the button. Transcript extraction is captions-only.
+Paste a YouTube URL → get a transcript you can copy or download as `.txt` / `.srt` / `.vtt`, plus an optional AI summary generated only when you click the button. The page embeds the video: turn on Timestamps and click any timestamp to seek the player. Transcript extraction is captions-only.
 
 Monorepo: **pnpm workspaces + Turborepo.** `apps/web` (Next.js, Vercel) + `apps/api`
 (FastAPI, Render) + `packages/shared` (the API contract every client depends on).
@@ -66,7 +66,7 @@ truncation and the cost formula are in
 | `pnpm dev` | Both apps in parallel via Turbo |
 | `pnpm build` | Shared + web production build, plus a `py_compile` syntax check for the API |
 | `pnpm typecheck` | `tsc --noEmit` across the TS packages |
-| `pnpm test` | pytest (57) + `node --test` cases (15), via Turbo |
+| `pnpm test` | pytest (58) + `node --test` cases (15), via Turbo |
 | `pnpm clean` | Drop build output and `node_modules` |
 
 ## Deploy

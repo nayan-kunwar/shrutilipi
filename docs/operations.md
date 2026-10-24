@@ -2,7 +2,7 @@
 
 Everything future-us needs: env, deploy flow, provider chain rules, known traps.
 
-Last verified: 2026-10-24 (includes the on-demand summary feature, §9).
+Last verified: 2026-10-25 (on-demand summary live in production on Gemini 2.5 Flash).
 
 ---
 
@@ -211,13 +211,14 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 - **Keyless local env = direct captions only** (correct default; your home IP isn't blocked).
 - To test chain behavior locally, export any subset of the §3 vars before starting uvicorn.
 - Unit-checks used during development (chain parse, eligibility, terminal, time-unit auto, proxy skip) — re-add as a test file if this grows.
-- Test suites: `apps/api/tests/` (**57 pytest** — limiter + 429 wiring, wake-probe contract, CORS contract, summary endpoint contract/cache/locks/accounting, LLM adapter + truncation) via `pnpm test` or `pytest` from `apps/api/`, and `packages/shared/src/` (**15 `node --test` cases** — 11 SRT/VTT formatter cases + 4 `friendlyError` copy cases; Node ≥22.6 runs the TS natively, no test framework). `pnpm test` runs both through Turbo; `pytest` is pinned in `requirements.txt`. The summary suites stub the transcript provider and the LLM, so they need no key and no network.
+- Test suites: `apps/api/tests/` (**58 pytest** — limiter + 429 wiring, wake-probe contract, CORS contract, summary endpoint contract/cache/locks/accounting, LLM adapter + truncation) via `pnpm test` or `pytest` from `apps/api/`, and `packages/shared/src/` (**15 `node --test` cases** — 11 SRT/VTT formatter cases + 4 `friendlyError` copy cases; Node ≥22.6 runs the TS natively, no test framework). `pnpm test` runs both through Turbo; `pytest` is pinned in `requirements.txt`. The summary suites stub the transcript provider and the LLM, so they need no key and no network.
 
 ### Frontend note
 - `apiBase()` in `apps/web/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.
 - `friendlyError()` and the response types live in `@shrutilipi/shared` (`friendlyError` is in `src/errors.ts`, re-exported from the index so Node's test runner can import it directly) — add new `detail` codes to its switch, and extend the `TranscriptErrorDetail`/`SummaryErrorDetail` union at the same time.
 - Summary UI: `TranscriptView` has a `Generate summary` button (never runs on page load), a summary card with `Copy summary`, and inline errors. It calls `fetchSummary()` in `lib/api.ts`, which sends `{videoId, lang}` only — never transcript text — and uses a 75 s timeout (30 s transcript + 30 s LLM, with headroom). The label reads `Refresh summary` after a result; within the 24 h cache TTL that re-request is answered from cache (§9).
 - Exports: `TranscriptView` has Copy, a segmented `Download [.txt | .srt | .vtt]` group and Share. `toSrt()`/`toVtt()` are pure functions in `packages/shared/src/subtitles.ts` (re-exported from the package index); the Python twins are `render_srt()`/`render_vtt()` in `tools/fetch.py`. `.txt` honors the Timestamps checkbox; the subtitle formats always carry timestamps, so they ignore it.
+- Player: `TranscriptView` embeds `https://www.youtube.com/embed/<id>?enablejsapi=1&playsinline=1&rel=0`. Timestamp buttons send `seekTo` + `playVideo` via `postMessage` to the iframe — no YouTube SDK script, no extra bundle. Toggling Timestamps does not remount the player. The embed is standard `youtube.com` (not `youtube-nocookie.com`); switching would also require changing the postMessage target origin.
 - Cold-start wake probe: `pingHealth()` in the same file; `useServerWake` + `ServerStatus` drive the pill (§4). No backend change needed — `/api/wake` is already outside the limiter.
 
 ---
@@ -252,7 +253,8 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 **What ships:** a `Generate summary` button under the transcript. Nothing runs
 until it is clicked — `GET /api/transcript` never calls an LLM, so the transcript
 path keeps its old latency and cost. Output is one `TL;DR:` sentence plus 3–5
-`•` bullets, asked for in the system prompt and capped at 350 output tokens.
+`•` bullets, asked for in the system prompt and capped at 1,024 output tokens
+(the cap leaves room for models that spend tokens on reasoning).
 
 ### Contract
 
@@ -303,7 +305,7 @@ budget.
 | `SUMMARY_MODEL` | — | Render | e.g. `gemini-2.5-flash`, `llama-3.3-70b-versatile` |
 | `SUMMARY_TIMEOUT_SECONDS` | `30` | optional | Per LLM call |
 | `SUMMARY_MAX_CHARS` | `15000` | optional | Prompt input cap (see Truncation) |
-| `SUMMARY_MAX_OUTPUT_TOKENS` | `350` | optional | Output cap |
+| `SUMMARY_MAX_OUTPUT_TOKENS` | `1024` | optional | Output cap; also covers reasoning tokens on models like Gemini Flash |
 | `SUMMARY_RATE_LIMIT_REQUESTS` | `5` | optional | Per IP, misses only |
 | `SUMMARY_RATE_LIMIT_WINDOW_SECONDS` | `600` | optional | Refill window |
 | `SUMMARY_RATE_LIMIT_ENABLED` | `true` | optional | Break-glass kill switch |
@@ -313,6 +315,10 @@ answers `503 summary_disabled` and **transcripts are unaffected** — summary is
 an optional capability, not a boot dependency. To swap vendors, change the
 three values and restart; the model is part of the cache key, so the new vendor
 starts cold instead of serving old text. No code or frontend change.
+
+**Live production config (verified 2026-10-25):**
+`SUMMARY_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`,
+`SUMMARY_MODEL=gemini-2.5-flash`. The key exists only in Render's dashboard.
 
 ### Truncation
 
@@ -335,7 +341,7 @@ Nothing is billed until the button is clicked; cache hits are free. Upper bound
 per **uncached** summary:
 
 - input ≈ `SUMMARY_MAX_CHARS / 4` tokens (English rule of thumb) → ~3,750 at the default
-- output ≤ `SUMMARY_MAX_OUTPUT_TOKENS` → ≤ 350 tokens
+- output ≤ `SUMMARY_MAX_OUTPUT_TOKENS` → ≤ 1,024 tokens (a typical answer is far shorter)
 
 ```
 cost ≈ (input_tokens  / 1_000_000 × input_price_per_M)
@@ -343,17 +349,25 @@ cost ≈ (input_tokens  / 1_000_000 × input_price_per_M)
 ```
 
 At the prices listed for Gemini 2.5 Flash when this was written (about
-$0.30/M input and $2.50/M output — **check current prices, they change**):
-≈ $0.0011 input + $0.0009 output ≈ **$0.002 per summary**, so roughly 500
-summaries per dollar. Provider free tiers (daily/RPM quotas) usually make the
-marginal bill $0 until the quota is hit; the summary limiter (5 per 10 min per
-IP) is what keeps a public instance inside those quotas.
+$0.30/M input and $2.50/M output — **check current prices, they change**), the
+hard caps cost ≈ $0.0011 input + $0.0026 output ≈ **$0.0037 per summary**
+(~270 summaries per dollar). A typical answer uses well under the output cap,
+so expect roughly **$0.002–$0.003**. Provider free tiers (daily/RPM quotas)
+usually make the marginal bill $0 until the quota is hit; the summary limiter
+(5 per 10 min per IP) is what keeps a public instance inside those quotas.
 
-Honesty caveats: **no live call has been measured against a real key yet**;
-token counts vary by language (Devanagari/Tamil cost more per character); and
-pricing/quota terms change. The formula and the caps are the durable part. A
-summary also needs a transcript: uncached, that spends one Supadata request
-(100/month free); already cached, zero.
+**Live measurement (2026-10-25):** the first uncached Gemini 2.5 Flash summary
+took ~4.5 s end-to-end (transcript fetch + LLM); the cached repeat was
+instant. The API response does not expose provider token usage, so the
+cap-based figure remains the honest upper bound. The original 350-token cap was
+too low because Gemini counts thinking tokens toward `max_tokens`, which
+truncated the visible answer mid-sentence; the default is now 1,024 and a
+`finish_reason="length"` response is rejected (`502`) rather than cached.
+
+Honesty caveats: token counts vary by language (Devanagari/Tamil cost more per
+character), and pricing/quota terms change. The formula and the caps are the
+durable part. A summary also needs a transcript: uncached, that spends one
+Supadata request (100/month free); already cached, zero.
 
 ### Cache, privacy, failure isolation
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   formatTime,
   toSrt,
@@ -18,6 +18,7 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryCopied, setSummaryCopied] = useState(false);
+  const playerRef = useRef<HTMLIFrameElement>(null);
 
   const textToCopy = useMemo(() => {
     if (!showTimestamps) return data.plainText;
@@ -62,6 +63,26 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
     } finally {
       setSummaryLoading(false);
     }
+  }
+
+  /**
+   * Seek the embedded player via YouTube's postMessage command API.
+   *
+   * The iframe is loaded with `enablejsapi=1`; no external SDK is needed, so
+   * there is no third-party script to load or CSP exception to maintain.
+   * `playVideo` runs in the same click gesture, so autoplay policies allow it.
+   */
+  function seekTo(seconds: number) {
+    const frame = playerRef.current;
+    if (!frame?.contentWindow) return;
+    const send = (func: string, args: unknown[] = []) => {
+      frame.contentWindow?.postMessage(
+        JSON.stringify({ event: "command", func, args }),
+        "https://www.youtube.com"
+      );
+    };
+    send("seekTo", [seconds, true]);
+    send("playVideo");
   }
 
   function downloadFile(name: string, content: string, mime: string) {
@@ -175,12 +196,35 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
         </div>
       )}
 
+      <div className="mb-3 aspect-video overflow-hidden rounded-xl border border-zinc-200 bg-black dark:border-zinc-800">
+        <iframe
+          ref={playerRef}
+          src={`https://www.youtube.com/embed/${data.videoId}?enablejsapi=1&playsinline=1&rel=0`}
+          title={data.title ? `Video: ${data.title}` : `YouTube video ${data.videoId}`}
+          className="h-full w-full border-0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
+        />
+      </div>
+
       <div className="max-h-[480px] overflow-y-auto rounded-xl bg-zinc-50 p-4 text-sm leading-relaxed dark:bg-zinc-950">
         {showTimestamps ? (
           <div className="space-y-1.5">
+            <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Click a timestamp to jump to that moment.
+            </p>
             {data.segments.map((s, i) => (
               <p key={i}>
-                <span className="mr-2 font-mono text-xs text-zinc-500">{formatTime(s.start)}</span>
+                <button
+                  type="button"
+                  onClick={() => seekTo(s.start)}
+                  aria-label={`Seek to ${formatTime(s.start)}`}
+                  title={`Seek to ${formatTime(s.start)}`}
+                  className="mr-2 rounded font-mono text-xs text-zinc-500 underline-offset-2 transition hover:text-brand hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:text-zinc-400"
+                >
+                  {formatTime(s.start)}
+                </button>
                 <span className="text-zinc-800 dark:text-zinc-200">{s.text}</span>
               </p>
             ))}
