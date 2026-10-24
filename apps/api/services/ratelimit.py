@@ -115,17 +115,28 @@ class RateLimiter:
             return retry_after
 
 
-def build_limiter() -> Optional[RateLimiter]:
-    """Factory honoring env. Returns None when disabled (callers skip)."""
-    if not env_truthy(os.getenv("RATE_LIMIT_ENABLED"), True):
-        logger.info("rate limiting disabled (RATE_LIMIT_ENABLED=%s)", os.getenv("RATE_LIMIT_ENABLED"))
+def build_limiter(
+    env_prefix: str = "RATE_LIMIT",
+    default_requests: int = DEFAULT_REQUESTS,
+    default_window: int = DEFAULT_WINDOW_SECONDS,
+) -> Optional[RateLimiter]:
+    """Factory honoring env. Returns None when disabled (callers skip).
+
+    `env_prefix` exists so a second, independent bucket can reuse the same
+    battle-tested implementation — e.g. SUMMARY_RATE_LIMIT_* for the LLM
+    endpoint, whose cost profile is different from upstream transcript calls.
+    """
+    enabled_var = f"{env_prefix}_ENABLED"
+    if not env_truthy(os.getenv(enabled_var), True):
+        logger.info("rate limiting disabled (%s=%s)", enabled_var, os.getenv(enabled_var))
         return None
     limiter = RateLimiter(
-        capacity=_env_int("RATE_LIMIT_REQUESTS", DEFAULT_REQUESTS),
-        window_seconds=_env_int("RATE_LIMIT_WINDOW_SECONDS", DEFAULT_WINDOW_SECONDS),
+        capacity=_env_int(f"{env_prefix}_REQUESTS", default_requests),
+        window_seconds=_env_int(f"{env_prefix}_WINDOW_SECONDS", default_window),
     )
     logger.info(
-        "rate limiting enabled: %d requests per %ds per client",
+        "%s: %d requests per %ds per client",
+        env_prefix.lower(),
         limiter.capacity,
         limiter.window_seconds,
     )

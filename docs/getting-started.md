@@ -1,7 +1,7 @@
 # Getting started
 
-Run ShrutiLipi locally from a fresh clone. The five "it looks broken" cases at
-the bottom are all real ones — check there before debugging anything.
+Run ShrutiLipi locally from a fresh clone. The "it looks broken" cases at the
+bottom are all real ones — check there before debugging anything.
 
 ## Prerequisites
 
@@ -39,13 +39,42 @@ Turborepo starts both halves in parallel:
 
 No env vars are needed locally. Keyless mode fetches YouTube captions directly
 (Supadata's key is only for the deployed fallback chain), and rate limiting is
-on by default (20 requests / 10 min / IP — misses only).
+on by default (20 requests / 10 min / IP — misses only). AI summaries are off
+until you set `SUMMARY_BASE_URL`, `SUMMARY_API_KEY` and `SUMMARY_MODEL` (see
+[Optional: AI summary](#optional-ai-summary)); without them the button shows a
+clear "isn't configured" message and transcripts are unaffected.
 
 ## 3. Use it
 
 Open the web URL, paste any YouTube link or video ID, **Get transcript** →
 copy it, download `.txt` / `.srt` / `.vtt`, or share. Timestamps toggle adds
-`[m:ss]` prefixes to the text copy/download.
+`[m:ss]` prefixes to the text copy/download. **Generate summary** (optional)
+produces a `TL;DR:` plus bullets on demand; nothing is generated on page load.
+
+## Optional: AI summary
+
+Set all three before `pnpm dev` (PowerShell syntax: `$env:SUMMARY_BASE_URL = "…"`):
+
+```bash
+SUMMARY_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
+SUMMARY_API_KEY=<your key> \
+SUMMARY_MODEL=gemini-2.5-flash \
+pnpm dev
+```
+
+Any OpenAI-compatible endpoint works (Groq, OpenRouter, a local server). Missing
+any of the three is a supported state: `POST /api/summary` returns
+`503 summary_disabled`. Details, limits and cost:
+[`operations.md` §9](operations.md#9-on-demand-ai-summary).
+
+PowerShell equivalent (this dev box's default shell):
+
+```powershell
+$env:SUMMARY_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+$env:SUMMARY_API_KEY  = "<your key>"
+$env:SUMMARY_MODEL    = "gemini-2.5-flash"
+pnpm dev
+```
 
 ## Variants
 
@@ -66,7 +95,7 @@ python tools/fetch.py HHUsHkYhkcM --srt --out subs.srt
 
 | Command | What runs |
 |---|---|
-| `pnpm test` | 29 pytest (limiter, wake probe, CORS) + 11 `node --test` formatter cases |
+| `pnpm test` | 57 pytest (limiter, wake probe, CORS, summary contract/cache/locks, LLM adapter) + 15 `node --test` cases (SRT/VTT + `friendlyError`) |
 | `pnpm typecheck` | `tsc --noEmit` across web + shared |
 | `pnpm build` | production Next build (stop `next dev` first — they share `.next`) |
 
@@ -80,6 +109,8 @@ python tools/fetch.py HHUsHkYhkcM --srt --out subs.srt
 | "The API is asleep" card, locally | The API really is down or on another port — the probe fetch failed | `curl http://localhost:8000/api/wake` → must return 200. If not, restart `pnpm dev` |
 | Weird double-stack behavior, flaky ports | A second `pnpm dev` while the first still runs (Windows lets two processes bind one port) | `netstat -ano \| findstr ":8000"` → `taskkill /F /T /PID <pid>` on the extra one; keep a single stack |
 | uvicorn didn't reload your edit | You're editing files the reloader isn't watching, or the terminal died | The terminal running `pnpm dev` must stay alive; watch for `WatchFiles detected changes` |
+| `Generate summary` says summary generation isn't configured | No `SUMMARY_*` env — this is the intended default, not a bug | Set all three vars and restart the API ([§9](operations.md#9-on-demand-ai-summary)) |
+| Summary says "already being generated" / "generated a lot of summaries" | `summary_busy` = same video is mid-generation; `summary_rate_limited` = 5 per 10 min per IP, attempt-counted | Wait for the lock (≤30 s) or the window; the transcript still works either way |
 
 ## Stop
 

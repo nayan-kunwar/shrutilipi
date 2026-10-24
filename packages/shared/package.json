@@ -11,7 +11,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/subtitles.test.ts",
+    "test": "node --test src/subtitles.test.ts src/friendly-error.test.ts",
     "clean": "rm -rf .turbo node_modules"
   },
   "devDependencies": {

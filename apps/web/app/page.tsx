@@ -105,7 +105,7 @@ function HomeInner() {
           Shruti<span className="text-brand">Lipi</span>
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Paste a YouTube URL, get the transcript — copy it or download as .txt.
+          Paste a YouTube URL, get the transcript — copy it, download .txt/.srt/.vtt, or summarize it.
         </p>
       </header>
 
@@ -145,7 +145,7 @@ function HomeInner() {
         </div>
       )}
 
-      {data && <TranscriptView data={data} />}
+      {data && <TranscriptView key={`${data.videoId}:${data.language}`} data={data} />}
     </main>
   );
 }

@@ -13,6 +13,15 @@ services:
         value: "false"
       - key: CHAIN_ORDER
         value: "supadata,serpapi"
+      # Optional on-demand summary (§9 of docs/operations.md). All three must
+      # be set to enable the feature; missing any leaves it off with a clean
+      # 503 summary_disabled, and transcripts are unaffected.
+      - key: SUMMARY_BASE_URL
+        sync: false
+      - key: SUMMARY_API_KEY
+        sync: false
+      - key: SUMMARY_MODEL
+        sync: false
       - key: SUPADATA_API_KEY
         sync: false
       - key: SERPAPI_API_KEY

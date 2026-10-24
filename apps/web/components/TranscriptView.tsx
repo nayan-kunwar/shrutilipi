@@ -1,32 +1,67 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatTime, toSrt, toVtt, type TranscriptResponse } from "@shrutilipi/shared";
+import {
+  formatTime,
+  toSrt,
+  toVtt,
+  type SummaryResponse,
+  type TranscriptResponse,
+} from "@shrutilipi/shared";
+import { fetchSummary } from "../lib/api";
 import ShareButtons from "./ShareButtons";
 
 export default function TranscriptView({ data }: { data: TranscriptResponse }) {
   const [showTimestamps, setShowTimestamps] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [summary, setSummary] = useState<SummaryResponse | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryCopied, setSummaryCopied] = useState(false);
 
   const textToCopy = useMemo(() => {
     if (!showTimestamps) return data.plainText;
     return data.segments.map((s) => `[${formatTime(s.start)}] ${s.text}`).join("\n");
   }, [data, showTimestamps]);
 
-  async function handleCopy() {
+  async function copyText(text: string) {
     try {
-      await navigator.clipboard.writeText(textToCopy);
+      await navigator.clipboard.writeText(text);
     } catch {
       // Fallback for non-secure contexts
       const ta = document.createElement("textarea");
-      ta.value = textToCopy;
+      ta.value = text;
       document.body.appendChild(ta);
       ta.select();
       document.execCommand("copy");
       document.body.removeChild(ta);
     }
+  }
+
+  async function handleCopy() {
+    await copyText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleCopySummary() {
+    if (!summary) return;
+    await copyText(summary.summary);
+    setSummaryCopied(true);
+    setTimeout(() => setSummaryCopied(false), 2000);
+  }
+
+  async function handleGenerateSummary() {
+    if (summaryLoading) return;
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      setSummary(await fetchSummary(data.videoId, data.language));
+    } catch (err) {
+      setSummaryError(err instanceof Error ? err.message : "Couldn't generate a summary.");
+    } finally {
+      setSummaryLoading(false);
+    }
   }
 
   function downloadFile(name: string, content: string, mime: string) {
@@ -99,6 +134,46 @@ export default function TranscriptView({ data }: { data: TranscriptResponse }) {
         </div>
         <ShareButtons videoId={data.videoId} lang={data.language} title={data.title || data.videoId} />
       </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2" aria-live="polite">
+        <button
+          onClick={handleGenerateSummary}
+          disabled={summaryLoading}
+          aria-busy={summaryLoading}
+          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium transition hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-brand dark:hover:text-brand"
+        >
+          {summaryLoading
+            ? "Generating summary…"
+            : summary
+              ? "Refresh summary"
+              : "Generate summary"}
+        </button>
+        {summaryError && (
+          <span role="alert" className="text-xs text-red-600 dark:text-red-300">
+            {summaryError}
+          </span>
+        )}
+      </div>
+
+      {summary && (
+        <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Summary</p>
+            <button
+              onClick={handleCopySummary}
+              className="rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-medium transition hover:border-brand hover:text-brand dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-brand dark:hover:text-brand"
+            >
+              {summaryCopied ? <span className="text-brand">Copied ✓</span> : "Copy summary"}
+            </button>
+          </div>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">
+            {summary.summary}
+          </p>
+          <p className="mt-2 text-[11px] text-zinc-400 dark:text-zinc-500">
+            Generated on demand · cached for 24 h
+          </p>
+        </div>
+      )}
 
       <div className="max-h-[480px] overflow-y-auto rounded-xl bg-zinc-50 p-4 text-sm leading-relaxed dark:bg-zinc-950">
         {showTimestamps ? (

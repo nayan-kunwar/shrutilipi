@@ -55,6 +55,22 @@ def test_custom_domain_get_is_allowed():
     assert r.headers.get("access-control-allow-origin") == CUSTOM_DOMAIN
 
 
+def test_preflight_allows_summary_post_from_localhost():
+    # The summary endpoint sends JSON, so the browser preflights it. Without
+    # POST in allow_methods the feature would fail only in real browsers.
+    r = client.options(
+        "/api/summary",
+        headers={
+            "Origin": "http://localhost:3001",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert r.status_code == 200
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:3001"
+    assert "POST" in r.headers.get("access-control-allow-methods", "")
+
+
 def test_custom_domain_preflight_is_allowed():
     r = client.options(
         "/api/transcript",

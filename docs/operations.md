@@ -2,7 +2,7 @@
 
 Everything future-us needs: env, deploy flow, provider chain rules, known traps.
 
-Last verified: commit `2fdeaf5` (2026-09-26).
+Last verified: 2026-10-24 (includes the on-demand summary feature, §9).
 
 ---
 
@@ -24,11 +24,13 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 - **Monorepo**: pnpm workspaces + Turborepo. `apps/web` (Next.js) · `apps/api` (FastAPI) · `packages/shared` (API contract) · `packages/tsconfig` (base TS config). Root scripts (`pnpm dev|build|typecheck|test`) run through Turbo; `apps/api/package.json` holds thin delegating scripts so Turbo can drive the Python side too.
 - **Frontend**: Next.js 14 App Router, `apps/web/`, built by `pnpm build` (`/` ≈ 5.1 kB first-load JS ≈ 92 kB). Not a static export — default Vercel build, despite what §6 used to claim.
 - **Backend**: FastAPI, `apps/api/`, Docker (`python`, 3.11). Dependencies pinned: `youtube-transcript-api==1.2.4`, `httpx==0.28.1` — hosted providers use plain `httpx`, no new deps.
-- **Shared package**: `@shrutilipi/shared` ships raw TS (no build step). It holds `TranscriptResponse`/`TranscriptSegment`, the `TranscriptErrorDetail` union, `friendlyError()`, and `formatTime()`. Anything touching `process.env` or the network stays in `apps/web/lib/api.ts`. `next.config.js` needs `transpilePackages: ["@shrutilipi/shared"]` and `experimental.outputFileTracingRoot` set to the repo root, or the build resolves the workspace dep but misses it in the trace.
+- **Shared package**: `@shrutilipi/shared` ships raw TS (no build step). It holds `TranscriptResponse`/`TranscriptSegment`, `SummaryResponse`, the `TranscriptErrorDetail`/`SummaryErrorDetail` unions, `friendlyError()` (in `src/errors.ts`, re-exported from the index so Node tests can import it directly), and `formatTime()`. Anything touching `process.env` or the network stays in `apps/web/lib/api.ts`. `next.config.js` needs `transpilePackages: ["@shrutilipi/shared"]` and `experimental.outputFileTracingRoot` set to the repo root, or the build resolves the workspace dep but misses it in the trace.
 - **API**:
   - `GET /api/wake` → `{"ok": true}` (frontend wake probe; `GET /health` is the ops alias for the same handler)
   - `GET /api/transcript?url=<youtube-url-or-id>&lang=<code>` → `{videoId, title, language, plainText, segments[]}` (`segments[i] = {start, duration, text}` in seconds)
+  - `POST /api/summary` with `{videoId, lang?}` → `{summary, model, cached}` — on-demand only; see §9
 - **Cache**: in-memory TTL dict, **24h** (`CACHE_TTL` in `apps/api/main.py`), key `videoId:lang`. Restart clears it.
+- **Summary cache**: a second 24h dict keyed `videoId:lang:model:prompt_version`; entries are created only when a summary is generated, never by the transcript route (§9).
 - **Title**: best-effort via YouTube oEmbed (no key); may be `null` → frontend falls back to showing `videoId`.
 
 ---
@@ -62,6 +64,9 @@ Last verified: commit `2fdeaf5` (2026-09-26).
 | `RATE_LIMIT_ENABLED` | `true` | leave unset | Kill switch: `0`/`false`/`no`/`off` disables the limiter |
 | `RATE_LIMIT_REQUESTS` | `20` | leave unset | Bucket capacity per client per window |
 | `RATE_LIMIT_WINDOW_SECONDS` | `600` | leave unset | Refill window in seconds (20 per 10 min); misses only, `/api/wake` unlimited |
+
+Summary-specific vars (`SUMMARY_*`) are documented in §9. The feature is off
+unless `SUMMARY_BASE_URL`, `SUMMARY_API_KEY` and `SUMMARY_MODEL` are all set.
 
 ### Chain semantics
 
@@ -100,6 +105,7 @@ process-local; restart clears them (fail-open). Tests:
 - **`rootDir` is `apps/api`.** Any move of the backend must be mirrored here *and* in the Render dashboard.
 - **Required manual secret:** `SUPADATA_API_KEY`.
 - Optional: `SERPAPI_API_KEY` **plus** `SERPAPI_ENABLED=true` (flag is NOT in render.yaml).
+- Optional on-demand summaries: set `SUMMARY_BASE_URL`, `SUMMARY_API_KEY` (secret) and `SUMMARY_MODEL` (§9). Missing any one of the three leaves the feature off — transcripts are unaffected.
 - If `CHAIN_ORDER` doesn't auto-appear, add manually: `supadata,serpapi`.
 - Plain vars from render.yaml: `FRONTEND_URL`, `DIRECT_ENABLED=false`.
 - After env edits: **Save, rebuild, and deploy** (button shows pending-changes state while dirty).
@@ -149,6 +155,15 @@ burn free instance hours and hide the problem rather than surface it.
    Repeat with `Origin: http://localhost:3000` for the dev path.
 5. Functional test: request `HHUsHkYhkcM` on the Vercel frontend (or `curl "…/api/transcript?url=HHUsHkYhkcM&lang=en"`).
 6. Render logs should show `transcript served by SupadataProvider video_id=… segments=…`.
+7. Summary smoke test (only when the feature is configured):
+   ```bash
+   curl -s -X POST https://shrutilipi-backend.onrender.com/api/summary \
+     -H "Content-Type: application/json" -d '{"videoId":"HHUsHkYhkcM"}'
+   ```
+   Expect `200` with `{summary, model, cached:false}`; a second call returns
+   `cached:true`. Run it preflighted from a browser origin too — the route
+   needs `POST` in CORS `allow_methods` (§9). Without `SUMMARY_*` env, expect
+   `503 {"detail":"summary_disabled"}`, which is the correct degraded state.
 
 Known-good test video: **`HHUsHkYhkcM`** (969 en segments, title via oEmbed).
 
@@ -196,11 +211,12 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 - **Keyless local env = direct captions only** (correct default; your home IP isn't blocked).
 - To test chain behavior locally, export any subset of the §3 vars before starting uvicorn.
 - Unit-checks used during development (chain parse, eligibility, terminal, time-unit auto, proxy skip) — re-add as a test file if this grows.
-- Test suites: `apps/api/tests/` (29 pytest — limiter + 429 wiring, wake-probe contract, CORS contract) via `pnpm test` or `pytest` from `apps/api/`, and `packages/shared/src/subtitles.test.ts` (11 `node --test` cases for the SRT/VTT formatters — Node ≥22.6 runs the TS natively, no test framework). `pnpm test` runs both through Turbo; `pytest` is pinned in `requirements.txt`.
+- Test suites: `apps/api/tests/` (**57 pytest** — limiter + 429 wiring, wake-probe contract, CORS contract, summary endpoint contract/cache/locks/accounting, LLM adapter + truncation) via `pnpm test` or `pytest` from `apps/api/`, and `packages/shared/src/` (**15 `node --test` cases** — 11 SRT/VTT formatter cases + 4 `friendlyError` copy cases; Node ≥22.6 runs the TS natively, no test framework). `pnpm test` runs both through Turbo; `pytest` is pinned in `requirements.txt`. The summary suites stub the transcript provider and the LLM, so they need no key and no network.
 
 ### Frontend note
 - `apiBase()` in `apps/web/lib/api.ts` reads `NEXT_PUBLIC_API_URL` (set to the Render URL in Vercel env); code default is `http://localhost:8000` for local dev.
-- `friendlyError()` and the response types now live in `@shrutilipi/shared` — add new `detail` codes to its switch, and extend the `TranscriptErrorDetail` union at the same time.
+- `friendlyError()` and the response types live in `@shrutilipi/shared` (`friendlyError` is in `src/errors.ts`, re-exported from the index so Node's test runner can import it directly) — add new `detail` codes to its switch, and extend the `TranscriptErrorDetail`/`SummaryErrorDetail` union at the same time.
+- Summary UI: `TranscriptView` has a `Generate summary` button (never runs on page load), a summary card with `Copy summary`, and inline errors. It calls `fetchSummary()` in `lib/api.ts`, which sends `{videoId, lang}` only — never transcript text — and uses a 75 s timeout (30 s transcript + 30 s LLM, with headroom). The label reads `Refresh summary` after a result; within the 24 h cache TTL that re-request is answered from cache (§9).
 - Exports: `TranscriptView` has Copy, a segmented `Download [.txt | .srt | .vtt]` group and Share. `toSrt()`/`toVtt()` are pure functions in `packages/shared/src/subtitles.ts` (re-exported from the package index); the Python twins are `render_srt()`/`render_vtt()` in `tools/fetch.py`. `.txt` honors the Timestamps checkbox; the subtitle formats always carry timestamps, so they ignore it.
 - Cold-start wake probe: `pingHealth()` in the same file; `useServerWake` + `ServerStatus` drive the pill (§4). No backend change needed — `/api/wake` is already outside the limiter.
 
@@ -228,3 +244,154 @@ pnpm build            # shared -> web, plus a py_compile syntax check for the AP
 - Exit codes for scripting: **0** ok, **1** no captions/bad URL, **2** network/server error or rate-limited (`429` — transient, respect `Retry-After`).
 - Verified locally: single/timestamps/out/batch/bad-id/dead-api all behave as specified.
 - Fair use: CLI hits the same free-tier quota as the web app (§3) — batch files should stay small. The prod API **is** rate-limited (20 req / 10 min per IP, `429 rate_limited` with `Retry-After`); automation must back off on 429 rather than retrying blindly. Don't build heavy automation on it without discussing limits first.
+
+---
+
+## 9. On-demand AI summary
+
+**What ships:** a `Generate summary` button under the transcript. Nothing runs
+until it is clicked — `GET /api/transcript` never calls an LLM, so the transcript
+path keeps its old latency and cost. Output is one `TL;DR:` sentence plus 3–5
+`•` bullets, asked for in the system prompt and capped at 350 output tokens.
+
+### Contract
+
+`POST /api/summary` with JSON `{"videoId": "<11-char id>", "lang": "en"}`
+→ `200 {"summary": string, "model": string, "cached": boolean}`.
+
+| Status | `detail` | Meaning |
+|---|---|---|
+| 400 | `invalid_url` | Body is not a YouTube id/URL |
+| 429 | `summary_rate_limited` | Summary bucket empty; `Retry-After` set |
+| 429 | `rate_limited` | The transcript fetch the summary needed is limited |
+| 502 | `summary_failed` | LLM failed, timed out, or returned an unusable body |
+| 503 | `summary_disabled` | `SUMMARY_*` config incomplete — feature off by design |
+| 503 | `summary_busy` | Same video still generating after a 30 s wait |
+| 404/502 | transcript codes | The source transcript could not be fetched (§3) |
+
+The browser preflights this route (JSON POST), so `POST` is in CORS
+`allow_methods`; the localhost-port regex covers any dev port.
+
+### Request path (order matters)
+
+1. Validate `videoId` → `400 invalid_url`
+2. Summary-cache hit → `200 cached:true`
+3. Summarizer missing → `503 summary_disabled`
+4. Consume one **summary** token → `429 summary_rate_limited`
+5. Per-video lock, wait at most 30 s → `503 summary_busy`
+6. Re-check the cache (another request may have filled it while waiting)
+7. Shared transcript helper: transcript cache → transcript limiter (misses only) → provider
+8. LLM call
+9. Store the summary (non-empty only) → `200 cached:false`
+
+**Accounting policy:** summary tokens are *attempt*-counted. A request that
+passes step 4 pays even if it later hits the transcript limiter, the lock
+timeout, or an LLM failure. That is deliberate: the limit caps LLM work per IP,
+and checking it *before* the lock stops a hot loop from queuing threads. Cache
+hits cost nothing. Transcript tokens are spent only on a real transcript-cache
+miss, so summarizing a video whose transcript was already viewed is free on the
+transcript side. The trade-off (a failed attempt still consumes budget) is the
+reason the error copy says "retry in a moment" rather than promising a fresh
+budget.
+
+### Environment
+
+| Var | Default | Set where | Notes |
+|---|---|---|---|
+| `SUMMARY_BASE_URL` | — | Render | OpenAI-compatible base URL, **without** `/chat/completions`. Gemini: `https://generativelanguage.googleapis.com/v1beta/openai` · Groq: `https://api.groq.com/openai/v1` · OpenRouter: `https://openrouter.ai/api/v1` · local llama.cpp/ollama: its `/v1` |
+| `SUMMARY_API_KEY` | — | Render secret (`sync: false`) | Bearer token. Never logged, never sent to clients |
+| `SUMMARY_MODEL` | — | Render | e.g. `gemini-2.5-flash`, `llama-3.3-70b-versatile` |
+| `SUMMARY_TIMEOUT_SECONDS` | `30` | optional | Per LLM call |
+| `SUMMARY_MAX_CHARS` | `15000` | optional | Prompt input cap (see Truncation) |
+| `SUMMARY_MAX_OUTPUT_TOKENS` | `350` | optional | Output cap |
+| `SUMMARY_RATE_LIMIT_REQUESTS` | `5` | optional | Per IP, misses only |
+| `SUMMARY_RATE_LIMIT_WINDOW_SECONDS` | `600` | optional | Refill window |
+| `SUMMARY_RATE_LIMIT_ENABLED` | `true` | optional | Break-glass kill switch |
+
+All three of base URL, key and model are required. If any is missing the route
+answers `503 summary_disabled` and **transcripts are unaffected** — summary is
+an optional capability, not a boot dependency. To swap vendors, change the
+three values and restart; the model is part of the cache key, so the new vendor
+starts cold instead of serving old text. No code or frontend change.
+
+### Truncation
+
+Deterministic **head** truncation at `SUMMARY_MAX_CHARS` (15,000 chars ≈ 3–4k
+English tokens), backed up to the last whitespace so a word is not split, with
+a visible marker:
+
+```
+[... transcript truncated for summarization ...]
+```
+
+Long videos are summarized from their opening ~15k characters only; the tail is
+never sent. Unit-tested in `tests/test_summarize.py`. Chunked/recursive
+summarization is intentionally not implemented — it multiplies cost and latency
+and has no consumer yet.
+
+### Cost
+
+Nothing is billed until the button is clicked; cache hits are free. Upper bound
+per **uncached** summary:
+
+- input ≈ `SUMMARY_MAX_CHARS / 4` tokens (English rule of thumb) → ~3,750 at the default
+- output ≤ `SUMMARY_MAX_OUTPUT_TOKENS` → ≤ 350 tokens
+
+```
+cost ≈ (input_tokens  / 1_000_000 × input_price_per_M)
+     + (output_tokens / 1_000_000 × output_price_per_M)
+```
+
+At the prices listed for Gemini 2.5 Flash when this was written (about
+$0.30/M input and $2.50/M output — **check current prices, they change**):
+≈ $0.0011 input + $0.0009 output ≈ **$0.002 per summary**, so roughly 500
+summaries per dollar. Provider free tiers (daily/RPM quotas) usually make the
+marginal bill $0 until the quota is hit; the summary limiter (5 per 10 min per
+IP) is what keeps a public instance inside those quotas.
+
+Honesty caveats: **no live call has been measured against a real key yet**;
+token counts vary by language (Devanagari/Tamil cost more per character); and
+pricing/quota terms change. The formula and the caps are the durable part. A
+summary also needs a transcript: uncached, that spends one Supadata request
+(100/month free); already cached, zero.
+
+### Cache, privacy, failure isolation
+
+- **Cache:** separate in-process dict, 24 h TTL, key
+  `videoId:lang:model:PROMPT_VERSION`. Expired entries are pruned on each write;
+  only non-empty summaries are stored. Restart clears it. `Refresh summary`
+  within the TTL re-requests and gets `cached:true` — change the model or bump
+  `PROMPT_VERSION` (`services/summarize.py`) to force real regeneration. That
+  variable is in the key precisely so a prompt change never serves old text.
+- **Privacy:** the client sends only `{videoId, lang}`. The server fetches the
+  transcript itself and sends the truncated text to the configured LLM provider.
+  Logs contain the video id, model name and error detail — never the transcript,
+  prompt, summary, or raw upstream bodies. Once sent, the LLM provider's data
+  policy applies to that text.
+- **Single-flight:** per-video locks (not one global lock), refcounted so the
+  table cannot grow without bound, with a 30 s wait cap. Process-local, same as
+  the caches — correct for one Render instance; two instances need Redis.
+- **Failure isolation:** LLM failures return `502 summary_failed`; the
+  transcript was cached before the LLM call, so the transcript view keeps
+  working and no cache entry is poisoned.
+
+### Verifying
+
+```bash
+# Disabled state (no SUMMARY_* env) — the correct local default:
+curl -s -X POST http://localhost:8000/api/summary \
+  -H 'Content-Type: application/json' -d '{"videoId":"HHUsHkYhkcM"}'
+# {"detail":"summary_disabled"}
+
+# Enabled: start the API with all three required vars, then:
+curl -s -X POST http://localhost:8000/api/summary \
+  -H 'Content-Type: application/json' -d '{"videoId":"HHUsHkYhkcM"}'
+# {"summary":"TL;DR: …","model":"…","cached":false}
+# second identical call -> "cached":true, no LLM call
+```
+
+The pytest suites stub both the provider and the LLM
+(`tests/test_summary.py`) and cover the adapter/truncation/env factory
+(`tests/test_summarize.py`), so the contract is verified without a key or
+network. A real-key smoke test is still the only way to confirm the vendor's
+endpoint, model name and quota.

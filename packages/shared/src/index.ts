@@ -27,6 +27,13 @@ export interface TranscriptResponse {
   segments: TranscriptSegment[];
 }
 
+/** On-demand summary: generated only when the user clicks the button. */
+export interface SummaryResponse {
+  summary: string;
+  model: string;
+  cached: boolean;
+}
+
 /** The `detail` codes the API can return (`_map_error` plus the rate limiter). */
 export type TranscriptErrorDetail =
   | "invalid_url"
@@ -38,6 +45,12 @@ export type TranscriptErrorDetail =
   | "rate_limited";
 
 /**
+ * `POST /api/summary` can return the summary-specific codes below, plus any
+ * transcript code when it has to fetch the source transcript first.
+ */
+export type SummaryErrorDetail = TranscriptErrorDetail | "summary_disabled" | "summary_rate_limited" | "summary_busy" | "summary_failed";
+
+/**
  * The canonical origin, used for `metadataBase`, the sitemap and robots.txt.
  *
  * This used to be copy-pasted into three files, which meant a domain change
@@ -46,31 +59,7 @@ export type TranscriptErrorDetail =
  */
 export const SITE_URL = "https://shrutilipi.nayankunwar.com";
 
-/**
- * Map an HTTP status + backend `detail` code to a sentence worth showing a user.
- * Unknown codes fall back to the raw detail so a new backend code is visible in
- * the UI rather than swallowed.
- */
-export function friendlyError(status: number, detail: string): string {
-  switch (detail) {
-    case "invalid_url":
-      return "That doesn't look like a valid YouTube URL or video ID.";
-    case "no_captions":
-      return "No captions found for this video. Try another video (Whisper fallback coming in v2).";
-    case "video_unavailable":
-      return "Video is unavailable, private, or age-restricted.";
-    case "youtube_blocked":
-      return "YouTube temporarily blocked the request. Wait a minute and retry.";
-    case "provider_unavailable":
-      return "Transcript services are busy or out of quota — retry in a few minutes.";
-    case "transcript_fetch_failed":
-      return "Couldn't fetch the transcript. Please retry.";
-    case "rate_limited":
-      return "You're requesting transcripts a bit too quickly — wait a minute and retry.";
-    default:
-      return status === 404 ? "Transcript not found for this video." : detail;
-  }
-}
+export { friendlyError } from "./errors";
 
 /** Seconds -> `m:ss`, or `h:mm:ss` once the video runs past an hour. */
 export function formatTime(s: number): string {
